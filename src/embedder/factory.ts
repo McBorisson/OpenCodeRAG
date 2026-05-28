@@ -4,16 +4,17 @@ import { OllamaProvider } from "./ollama.js";
 import { OpenAIProvider } from "./openai.js";
 
 export function createEmbedder(config: RagConfig): EmbeddingProvider {
-  const { provider, baseUrl, model, apiKey, useProxy } = config.embedding;
+  const { provider, baseUrl, model, apiKey, proxy, timeoutMs } = config.embedding;
+  const effectiveTimeoutMs = timeoutMs ?? 30000;
 
   switch (provider) {
     case "ollama":
-      return new OllamaProvider(baseUrl, model, apiKey, 5000, useProxy);
+      return new OllamaProvider(baseUrl, model, apiKey, effectiveTimeoutMs, proxy);
     case "openai":
       if (!apiKey) {
         throw new Error("OpenAI provider requires an apiKey");
       }
-      return new OpenAIProvider(baseUrl, model, apiKey);
+      return new OpenAIProvider(baseUrl, model, apiKey, effectiveTimeoutMs, proxy);
     default:
       throw new Error(`Unknown embedding provider: ${provider}`);
   }

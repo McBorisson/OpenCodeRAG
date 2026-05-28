@@ -2,7 +2,15 @@
   "embedding": {
     "provider": "ollama",
     "baseUrl": "http://127.0.0.1:11434/api",
-    "model": "embeddinggemma"
+    "apiKey": "",
+    "model": "embeddinggemma",
+    "timeoutMs": 30000,
+    "proxy": {
+      "url": "",
+      "username": "",
+      "password": "",
+      "noProxy": ""
+    }
   },
   "indexing": {
     "includeExtensions": [

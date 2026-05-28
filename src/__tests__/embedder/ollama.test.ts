@@ -82,8 +82,7 @@ describe("OllamaProvider", () => {
         "http://localhost:11434/api",
         "embeddinggemma",
         undefined,
-        1,
-        true
+        1
       );
 
       await assert.rejects(
@@ -128,6 +127,93 @@ describe("OllamaProvider", () => {
       const embeddings = await p.embed(["hello"]);
 
       assert.deepEqual(embeddings, [[1, 2, 3]]);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("follows redirect responses from Ollama", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("fetch should not be called for localhost");
+    }) as typeof fetch;
+
+    const server = createServer((req, res) => {
+      if (req.url === "/api/embed") {
+        res.writeHead(301, { Location: "/api/embed-final" });
+        res.end();
+        return;
+      }
+
+      if (req.url === "/api/embed-final") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += String(chunk);
+        });
+        req.on("end", () => {
+          assert.equal(req.method, "POST");
+          assert.match(body, /"input":"hello"/);
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ embeddings: [[7, 8, 9]] }));
+        });
+        return;
+      }
+
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("not found");
+    });
+
+    try {
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (typeof address !== "object" || address === null) {
+        throw new Error("failed to start test server");
+      }
+
+      const p = new OllamaProvider(`http://localhost:${address.port}/api`, "embeddinggemma");
+      const embeddings = await p.embed(["hello"]);
+
+      assert.deepEqual(embeddings, [[7, 8, 9]]);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("accepts Ollama responses that use an embeddings array", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("fetch should not be called for localhost");
+    }) as typeof fetch;
+
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += String(chunk);
+      });
+      req.on("end", () => {
+        assert.equal(req.method, "POST");
+        assert.equal(req.url, "/api/embed");
+        assert.match(body, /"input":"hello"/);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ model: "embeddinggemma", embeddings: [[4, 5, 6]] }));
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (typeof address !== "object" || address === null) {
+        throw new Error("failed to start test server");
+      }
+
+      const p = new OllamaProvider(`http://localhost:${address.port}/api`, "embeddinggemma");
+      const embeddings = await p.embed(["hello"]);
+
+      assert.deepEqual(embeddings, [[4, 5, 6]]);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       globalThis.fetch = originalFetch;

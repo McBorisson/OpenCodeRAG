@@ -28,21 +28,20 @@ describe("createEmbedder", () => {
         baseUrl: "http://localhost:11434/v1",
         model: "custom-model",
         apiKey: undefined,
-        useProxy: false,
       },
     });
     const embedder = createEmbedder(config);
     assert.equal(embedder.name, "ollama");
   });
 
-  it("creates Ollama provider with proxy enabled", () => {
+  it("creates Ollama provider with proxy config", () => {
     const config = makeConfig({
       embedding: {
         provider: "ollama",
         baseUrl: "http://localhost:11434/v1",
         model: "custom-model",
         apiKey: undefined,
-        useProxy: true,
+        proxy: { url: "http://proxy:8080", username: "user", password: "pass" },
       },
     });
     const embedder = createEmbedder(config);

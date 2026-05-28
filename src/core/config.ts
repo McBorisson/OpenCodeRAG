@@ -7,13 +7,21 @@ export interface ChunkerConfig {
   extensions: string[];
 }
 
+export interface ProxyConfig {
+  url?: string;
+  username?: string;
+  password?: string;
+  noProxy?: string;
+}
+
 export interface RagConfig {
   embedding: {
     provider: "ollama" | "openai";
     baseUrl: string;
     apiKey?: string;
     model: string;
-    useProxy: boolean;
+    timeoutMs?: number;
+    proxy?: ProxyConfig;
   };
   indexing: {
     includeExtensions: string[];
@@ -38,7 +46,7 @@ export const DEFAULT_CONFIG: RagConfig = {
     provider: "ollama",
     baseUrl: "http://localhost:11434/api",
     model: "embeddinggemma",
-    useProxy: false,
+    timeoutMs: 30000,
   },
   indexing: {
     includeExtensions: [

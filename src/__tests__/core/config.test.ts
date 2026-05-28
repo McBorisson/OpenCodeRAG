@@ -29,11 +29,11 @@ describe("loadConfig", () => {
   it("allows partial override of embedding proxy setting", () => {
     writeFileSync(
       tmpFile,
-      JSON.stringify({ embedding: { useProxy: true } }),
+      JSON.stringify({ embedding: { proxy: { url: "http://proxy:8080" } } }),
       "utf-8"
     );
     const config = loadConfig(tmpFile);
-    assert.equal(config.embedding.useProxy, true);
+    assert.equal(config.embedding.proxy?.url, "http://proxy:8080");
   });
 
   it("allows partial override of embedding settings", () => {

@@ -9,7 +9,7 @@ MVP implemented. All core modules are built and tested:
 - Retrieval pipeline
 - CLI (index, query, clear, status)
 - OpenCode plugin (chat.message hook)
-- Test suite (60 tests, 0 failures)
+- Test suite (336 tests, 0 failures)
 
 Design docs: `ReadMe.md` (project docs), `PLANNING.md` (roadmap + brainstorming),
 `docs/designs/2026-05-28-rag-plugin-mvp-design.md` (architecture design).
@@ -48,8 +48,8 @@ src/
     factory.ts        — getChunker(filePath) by extension, chunkFile()
     uuid.ts           — simple UUID v4 generator
   embedder/
-    ollama.ts         — POST /embeddings, one text per request
-    openai.ts         — POST /embeddings, batched input with auth header
+    ollama.ts         — POST /embed, one text per request
+    openai.ts         — POST /embed, batched input with auth header
     factory.ts        — createEmbedder(config), embedBatch()
   vectorstore/
     lancedb.ts        — LanceDBStore with memory:// support for tests
@@ -130,6 +130,34 @@ adding a dependency.
 - `loadConfig()` deep-merges per section (not recursive)
 - CLI auto-detects `./opencode-rag.json` and `./.opencode/rag.json`
 - Default config is the fallback when no file found
+
+### Corporate proxy / proxy configuration
+When behind a corporate proxy:
+
+1. **Set `HTTP_PROXY` / `HTTPS_PROXY` env vars** (standard approach) — Node.js `fetch()` routes external requests through the proxy automatically. Localhost (`127.0.0.1`, `localhost`, `::1`) is always bypassed.
+
+2. **Explicit proxy in config** — Add an `embedding.proxy` section to `opencode-rag.json`:
+   ```json
+   {
+     "embedding": {
+       "proxy": {
+         "url": "http://proxy.krz.uni-heidelberg.de:8080",
+         "username": "your-username",
+         "password": "your-password",
+         "noProxy": "localhost,127.0.0.1,.local,.internal"
+       }
+     }
+   }
+   ```
+   - `url` is the proxy URL
+   - `username`/`password` are sent as `Proxy-Authorization: Basic` header
+   - `noProxy` is a comma-separated list of hosts to bypass (localhost always bypassed)
+
+3. **OpenCode plugin 301 redirect fix** — When running inside OpenCode, `http.request()` may route through a global proxy agent patched by OpenCode's runtime. To ensure localhost requests bypass any proxy: `directRequest()` in `http.ts` creates an explicit `http.Agent()` instance (not `http.globalAgent`) and passes it to `transport.request()`. This guarantees the request connects directly regardless of any global agent override.
+
+4. **Proxy auth encoding** — Basic auth is computed in `buildProxyAuthHeader()` in `http.ts`. The `username` and `password` fields are Base64-encoded and sent as the `Proxy-Authorization` header on `fetch()` calls.
+
+5. **Env var override behavior** — If both `HTTP_PROXY` env vars and config `proxy.url` are set, env vars take precedence. If only one is set, it's used. Neither is required.
 
 ## Adding a New Language Chunker
 

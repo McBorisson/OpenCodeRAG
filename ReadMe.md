@@ -87,8 +87,15 @@ Create `opencode-rag.json` in the project root (auto-detected) or pass via
   "embedding": {
     "provider": "ollama",
     "baseUrl": "http://localhost:11434/api",
+    "apiKey": "",
     "model": "embeddinggemma",
-    "useProxy": false
+    "timeoutMs": 30000,
+    "proxy": {
+      "url": "",
+      "username": "",
+      "password": "",
+      "noProxy": "localhost,127.0.0.1,.local,.internal"
+    }
   },
   "indexing": {
     "includeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".java", ".go", ".rs", ".rb", ".kt", ".kts", ".swift", ".md", ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hxx", ".cs", ".aspx", ".razor", ".cshtml", ".json", ".html", ".htm", ".css", ".xml", ".csproj", ".sln"],
@@ -116,13 +123,14 @@ Config files support partial overrides — missing keys fall back to defaults
 
 | Provider | `baseUrl` example                 | Notes                        |
 | -------- | --------------------------------- | ---------------------------- |
-| ollama   | `http://localhost:11434/api`       | Default. No apiKey required. `useProxy` defaults to `false`. |
+| ollama   | `http://localhost:11434/api`       | Default. No apiKey required. Proxy is disabled when `embedding.proxy.url` is empty. |
 | openai   | `https://api.openai.com/v1`       | Requires apiKey.             |
 
+`embedding.timeoutMs` defaults to 30000 ms. Increase it if your local model has a slow cold start.
+
 OpenAI provider sends all texts in a single request. Ollama sends one request
-per request to `/api/embed`. Set `embedding.useProxy` to `true` if you want
-Ollama requests to go through the standard proxy-aware HTTP path instead of the
-direct socket path.
+per request to `/api/embed`. Set `embedding.proxy.url` to use the standard
+proxy-aware HTTP path instead of the direct socket path.
 
 ## Usage
 

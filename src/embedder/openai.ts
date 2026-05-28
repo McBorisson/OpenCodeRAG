@@ -1,4 +1,5 @@
 import type { EmbeddingProvider } from "../core/interfaces.js";
+import type { ProxyConfig } from "../core/config.js";
 import { postJson } from "./http.js";
 
 export class OpenAIProvider implements EmbeddingProvider {
@@ -8,12 +9,14 @@ export class OpenAIProvider implements EmbeddingProvider {
   private model: string;
   private apiKey: string;
   private timeoutMs: number;
+  private proxy?: ProxyConfig;
 
-  constructor(baseUrl: string, model: string, apiKey: string, timeoutMs: number = 5000) {
+  constructor(baseUrl: string, model: string, apiKey: string, timeoutMs: number = 30000, proxy?: ProxyConfig) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.model = model;
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs;
+    this.proxy = proxy;
   }
 
   async embed(texts: string[]): Promise<number[][]> {
@@ -21,7 +24,8 @@ export class OpenAIProvider implements EmbeddingProvider {
       `${this.baseUrl}/embeddings`,
       { model: this.model, input: texts },
       { Authorization: `Bearer ${this.apiKey}` },
-      this.timeoutMs
+      this.timeoutMs,
+      this.proxy
     );
 
     if (!response.ok) {
@@ -41,7 +45,6 @@ export class OpenAIProvider implements EmbeddingProvider {
 
     return json.data
       .sort((a, b) => {
-        // OpenAI returns data in correct order but with index field
         return 0;
       })
       .map((item) => item.embedding);
