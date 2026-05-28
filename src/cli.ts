@@ -2,6 +2,7 @@ import { Command } from "commander";
 import path from "node:path";
 import chokidar from "chokidar";
 import { loadConfig, DEFAULT_CONFIG, type RagConfig } from "./core/config.js";
+import { appendDebugLog } from "./core/fileLogger.js";
 import { loadChunkersFromConfig } from "./chunker/loader.js";
 import { createEmbedder } from "./embedder/factory.js";
 import { LanceDBStore } from "./vectorstore/lancedb.js";
@@ -21,37 +22,48 @@ interface CliOptions {
   topK?: string;
 }
 
-async function resolveConfig(opt: CliOptions): Promise<RagConfig> {
+function logCliError(logFilePath: string, scope: string, message: string, error: unknown): void {
+  console.error(message);
+  appendDebugLog(logFilePath, { scope, message, error });
+}
+
+function logCliInfo(logFilePath: string, scope: string, message: string): void {
+  console.log(message);
+  appendDebugLog(logFilePath, { scope, message });
+}
+
+async function resolveConfig(opt: CliOptions, logFilePath: string): Promise<RagConfig> {
   if (opt.config) {
     try {
       const configPath = path.resolve(opt.config);
       const cfg = loadConfig(configPath);
       await loadChunkersFromConfig(cfg, path.dirname(configPath));
-      console.log(`Config: ${configPath}`);
-      return logConfigDetails(cfg);
-    } catch {
+      logCliInfo(logFilePath, "config", `Config: ${configPath}`);
+      return logConfigDetails(logFilePath,cfg);
+    } catch (err) {
+      logCliError(logFilePath, "config", `Could not load config from ${opt.config}, using defaults`, err);
       console.error(`Could not load config from ${opt.config}, using defaults`);
     }
   }
-  for (const loc of ["opencode-rag.json", ".opencode/rag.json"]) {
+  for (const loc of ["opencode-rag.json", ".opencode/opencode-rag.json", ".opencode/rag.json"]) {
+    const configPath = path.resolve(loc);
     try {
-      const configPath = path.resolve(loc);
       const cfg = loadConfig(configPath);
       await loadChunkersFromConfig(cfg, path.dirname(configPath));
-      console.log(`Config: ${configPath}`);
-      return logConfigDetails(cfg);
-    } catch {
-      // continue
+      logCliInfo(logFilePath, "config", `Config: ${configPath}`);
+      return logConfigDetails(logFilePath, cfg);
+    } catch (err) {
+      logCliError(logFilePath, "config", `Failed to load config from ${configPath}`, err);
     }
   }
-  console.log(`Config: using defaults (no opencode-rag.json found)`);
-  return logConfigDetails(DEFAULT_CONFIG);
+  logCliInfo(logFilePath, "config", `Config: using defaults (no opencode-rag.json found)`);
+  return logConfigDetails(logFilePath, DEFAULT_CONFIG);
 }
 
-function logConfigDetails(config: RagConfig): RagConfig {
-  console.log(`  Embedding provider: ${config.embedding.provider}`);
-  console.log(`  Embedding model:    ${config.embedding.model}`);
-  console.log(`  Vector store:       ${config.vectorStore.path}`);
+function logConfigDetails(logFilePath: string, config: RagConfig): RagConfig {
+  logCliInfo(logFilePath, "config", `  Embedding provider: ${config.embedding.provider}`);
+  logCliInfo(logFilePath, "config", `  Embedding model:    ${config.embedding.model}`);
+  logCliInfo(logFilePath, "config", `  Vector store:       ${config.vectorStore.path}`);
   return config;
 }
 
@@ -60,14 +72,14 @@ function formatTimestamp(timestamp?: number): string {
   return new Date(timestamp).toLocaleString();
 }
 
-function logIndexSummary(stats: IndexRunStats): void {
-  console.log(`  New:              ${stats.newFiles}`);
-  console.log(`  Modified:         ${stats.modifiedFiles}`);
-  console.log(`  Unchanged:        ${stats.unchangedFiles}`);
-  console.log(`  Deleted:          ${stats.deletedFiles}`);
-  console.log(`  Removed:          ${stats.removedFiles}`);
-  console.log(`  Empty skipped:    ${stats.skippedEmptyFiles}`);
-  console.log(`  Chunks written:   ${stats.totalChunks}`);
+function logIndexSummary(logFilePath: string, stats: IndexRunStats): void {
+  logCliInfo(logFilePath, "index", `  New:              ${stats.newFiles}`);
+  logCliInfo(logFilePath, "index", `  Modified:         ${stats.modifiedFiles}`);
+  logCliInfo(logFilePath, "index", `  Unchanged:        ${stats.unchangedFiles}`);
+  logCliInfo(logFilePath, "index", `  Deleted:          ${stats.deletedFiles}`);
+  logCliInfo(logFilePath, "index", `  Removed:          ${stats.removedFiles}`);
+  logCliInfo(logFilePath, "index", `  Empty skipped:    ${stats.skippedEmptyFiles}`);
+  logCliInfo(logFilePath, "index", `  Chunks written:   ${stats.totalChunks}`);
 }
 
 function createWatchIgnore(
@@ -115,24 +127,25 @@ program
     const started = Date.now();
 
     try {
-      const config = await resolveConfig(options);
       const cwd = process.cwd();
+      const logFilePath = path.resolve(cwd, ".opencode", "opencode-rag.log");
+      const config = await resolveConfig(options, logFilePath);
 
-      console.log("\nIndexing workspace...");
+      logCliInfo(logFilePath, "index", "\nIndexing workspace...");
 
       const embedder = createEmbedder(config);
 
       // Detect actual vector dimension from the model
       const probe = await embedder.embed(["dimension-probe"]);
       const vectorDimension = probe[0]?.length ?? 384;
-      console.log(`  Vector dimension:   ${vectorDimension}`);
+      logCliInfo(logFilePath, "index", `  Vector dimension:   ${vectorDimension}`);
 
       const store = new LanceDBStore(
         path.resolve(cwd, config.vectorStore.path),
         vectorDimension
       );
 
-      console.log(`Scanning: ${cwd}`);
+      logCliInfo(logFilePath, "index", `Scanning: ${cwd}`);
       const runPass = async (watchTriggered: boolean = false): Promise<void> => {
         const passStarted = Date.now();
         const stats = await runIndexPass({
@@ -143,14 +156,15 @@ program
           embedder,
           force: Boolean(options.force && !watchTriggered),
           logger: {
-            info: (message) => console.log(message),
+            info: (message) => logCliInfo(logFilePath, "index", message),
             warn: (message) => console.warn(message),
           },
         });
 
-        console.log();
-        logIndexSummary(stats);
-        console.log(
+        logIndexSummary(logFilePath, stats);
+        logCliInfo(
+          logFilePath,
+          "index",
           `\nIndexing complete. ${stats.finalCount} chunks stored (${formatDuration(Date.now() - passStarted)}).`
         );
       };
@@ -161,11 +175,12 @@ program
         return;
       }
 
-      console.log("\nWatching for changes...");
+      logCliInfo(logFilePath, "index", "\nWatching for changes...");
       const scheduler = createWatchPassScheduler(
         () => runPass(true),
         (error) => {
           const message = (error as Error).message || String(error);
+          logCliError(logFilePath, "watch", `Watch reindex failed: ${message}`, error);
           console.error(`\nWatch reindex failed: ${message}`);
         },
         300
@@ -184,6 +199,7 @@ program
       watcher.on("unlinkDir", handleChange);
       watcher.on("addDir", handleChange);
       watcher.on("error", (error) => {
+        logCliError(logFilePath, "watch", `Watcher error: ${(error as Error).message}`, error);
         console.error(`\nWatcher error: ${(error as Error).message}`);
       });
 
@@ -197,9 +213,11 @@ program
       process.once("SIGTERM", () => void shutdown());
 
       const duration = formatDuration(Date.now() - started);
-      console.log(`Watcher ready (${duration} startup). Press Ctrl+C to stop.`);
+      logCliInfo(logFilePath, "index", `Watcher ready (${duration} startup). Press Ctrl+C to stop.`);
     } catch (err) {
       const message = (err as Error).message || String(err);
+      const logFilePath = path.resolve(process.cwd(), ".opencode", "opencode-rag.log");
+      logCliError(logFilePath, "index", `Indexing failed: ${message}`, err);
       console.error(`\nIndexing failed: ${message}`);
       if (message.toLowerCase().includes("fetch") || message.toLowerCase().includes("econnrefused")) {
         console.error("Hint: Is your embedding provider running?");
@@ -218,43 +236,43 @@ program
     const started = Date.now();
 
     try {
-      const config = await resolveConfig(options);
       const cwd = process.cwd();
+      const logFilePath = path.resolve(cwd, ".opencode", "opencode-rag.log");
+      const config = await resolveConfig(options, logFilePath);
 
-      console.log(`\nQuerying: "${query}"`);
-      console.log(`Top-K: ${parseInt(options.topK ?? "10", 10)}`);
+      logCliInfo(logFilePath, "query", `\nQuerying: "${query}"`);
+      logCliInfo(logFilePath, "query", `Top-K: ${parseInt(options.topK ?? "10", 10)}`);
 
       const embedder = createEmbedder(config);
       const store = new LanceDBStore(path.resolve(cwd, config.vectorStore.path));
 
       const indexedCount = await store.count();
       if (indexedCount === 0) {
-        console.log("No indexed chunks found. Run 'opencode-rag index' first.");
+        logCliInfo(logFilePath, "query", "No indexed chunks found. Run 'opencode-rag index' first.");
         return;
       }
-      console.log(`Searching ${indexedCount} indexed chunks...`);
+      logCliInfo(logFilePath, "query", `Searching ${indexedCount} indexed chunks...`);
 
       const topK = parseInt(options.topK ?? "10", 10);
       const results = await retrieve(query, embedder, store, { topK });
 
       if (results.length === 0) {
-        console.log("No results found.");
+        logCliInfo(logFilePath, "query", "No results found.");
         return;
       }
 
       const duration = formatDuration(Date.now() - started);
-      console.log(`\n${results.length} result(s) in ${duration}:\n`);
+      logCliInfo(logFilePath, "query", `\n${results.length} result(s) in ${duration}:\n`);
 
       for (const r of results) {
-        console.log(`  ${r.chunk.metadata.filePath}:${r.chunk.metadata.startLine}-${r.chunk.metadata.endLine}`);
-        console.log(`  Score: ${r.score.toFixed(4)}`);
-        console.log(
-          `  ${r.chunk.content.slice(0, 200).replace(/\n/g, "\n  ")}`
-        );
-        console.log();
+        logCliInfo(logFilePath, "query", `  ${r.chunk.metadata.filePath}:${r.chunk.metadata.startLine}-${r.chunk.metadata.endLine}`);
+        logCliInfo(logFilePath, "query", `  Score: ${r.score.toFixed(4)}`);
+        logCliInfo(logFilePath, "query", `  ${r.chunk.content.slice(0, 200).replace(/\n/g, "\n  ")}`);
       }
     } catch (err) {
       const message = (err as Error).message || String(err);
+      const logFilePath = path.resolve(process.cwd(), ".opencode", "opencode-rag.log");
+      logCliError(logFilePath, "query", `Query failed: ${message}`, err);
       console.error(`\nQuery failed: ${message}`);
       if (message.toLowerCase().includes("fetch") || message.toLowerCase().includes("econnrefused")) {
         console.error("Hint: Is your embedding provider running?");
@@ -269,22 +287,25 @@ program
   .option("-c, --config <path>", "path to config file")
   .action(async (options: CliOptions) => {
     try {
-      const config = await resolveConfig(options);
       const cwd = process.cwd();
+      const logFilePath = path.resolve(cwd, ".opencode", "opencode-rag.log");
+      const config = await resolveConfig(options, logFilePath);
 
       const store = new LanceDBStore(path.resolve(cwd, config.vectorStore.path));
       const prevCount = await store.count();
 
       if (prevCount === 0) {
-        console.log("No indexed data to clear.");
+        logCliInfo(logFilePath, "clear", "No indexed data to clear.");
         return;
       }
 
-      console.log(`Clearing ${prevCount} indexed chunks...`);
+      logCliInfo(logFilePath, "clear", `Clearing ${prevCount} indexed chunks...`);
       await store.clear();
-      console.log(`Done. ${prevCount} chunks removed.`);
+      logCliInfo(logFilePath, "clear", `Done. ${prevCount} chunks removed.`);
     } catch (err) {
       const message = (err as Error).message || String(err);
+      const logFilePath = path.resolve(process.cwd(), ".opencode", "opencode-rag.log");
+      logCliError(logFilePath, "clear", `Clear failed: ${message}`, err);
       console.error(`\nClear failed: ${message}`);
       process.exit(1);
     }
@@ -296,8 +317,9 @@ program
   .option("-c, --config <path>", "path to config file")
   .action(async (options: CliOptions) => {
     try {
-      const config = await resolveConfig(options);
       const cwd = process.cwd();
+      const logFilePath = path.resolve(cwd, ".opencode", "opencode-rag.log");
+      const config = await resolveConfig(options, logFilePath);
 
       const store = new LanceDBStore(path.resolve(cwd, config.vectorStore.path));
       const count = await store.count();
@@ -308,25 +330,27 @@ program
         store
       );
 
-      console.log(`\nIndexed chunks:    ${count}`);
-      console.log(`Store path:        ${path.resolve(cwd, config.vectorStore.path)}`);
-      console.log(`Embedding provider: ${config.embedding.provider}`);
-      console.log(`Embedding model:   ${config.embedding.model}`);
-      console.log(`File extensions:   ${config.indexing.includeExtensions.join(", ")}`);
-      console.log(`Excluded dirs:     ${config.indexing.excludeDirs.join(", ")}`);
-      console.log(`Default top-K:     ${config.retrieval.topK}`);
-      console.log(`Plugin enabled:    ${config.openCode.enabled}`);
-      console.log(`Manifest status:   ${summary.manifestStatus}`);
-      console.log(`Manifest entries:  ${summary.manifestEntries}`);
-      console.log(`Last indexed:      ${formatTimestamp(summary.lastIndexedAt)}`);
-      console.log(`Up-to-date files:  ${summary.upToDateFiles}`);
-      console.log(`Pending files:     ${summary.pendingFiles}`);
-      console.log(`Watch mode:        off`);
+      logCliInfo(logFilePath, "status", `\nIndexed chunks:    ${count}`);
+      logCliInfo(logFilePath, "status", `Store path:        ${path.resolve(cwd, config.vectorStore.path)}`);
+      logCliInfo(logFilePath, "status", `Embedding provider: ${config.embedding.provider}`);
+      logCliInfo(logFilePath, "status", `Embedding model:   ${config.embedding.model}`);
+      logCliInfo(logFilePath, "status", `File extensions:   ${config.indexing.includeExtensions.join(", ")}`);
+      logCliInfo(logFilePath, "status", `Excluded dirs:     ${config.indexing.excludeDirs.join(", ")}`);
+      logCliInfo(logFilePath, "status", `Default top-K:     ${config.retrieval.topK}`);
+      logCliInfo(logFilePath, "status", `Plugin enabled:    ${config.openCode.enabled}`);
+      logCliInfo(logFilePath, "status", `Manifest status:   ${summary.manifestStatus}`);
+      logCliInfo(logFilePath, "status", `Manifest entries:  ${summary.manifestEntries}`);
+      logCliInfo(logFilePath, "status", `Last indexed:      ${formatTimestamp(summary.lastIndexedAt)}`);
+      logCliInfo(logFilePath, "status", `Up-to-date files:  ${summary.upToDateFiles}`);
+      logCliInfo(logFilePath, "status", `Pending files:     ${summary.pendingFiles}`);
+      logCliInfo(logFilePath, "status", `Watch mode:        off`);
       if (summary.rebuildRequired) {
-        console.log(`Rebuild required:  yes (manifest missing/corrupt)`);
+        logCliInfo(logFilePath, "status", `Rebuild required:  yes (manifest missing/corrupt)`);
       }
     } catch (err) {
       const message = (err as Error).message || String(err);
+      const logFilePath = path.resolve(process.cwd(), ".opencode", "opencode-rag.log");
+      logCliError(logFilePath, "status", `Status check failed: ${message}`, err);
       console.error(`\nStatus check failed: ${message}`);
       process.exit(1);
     }

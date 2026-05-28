@@ -4,11 +4,11 @@ import { OllamaProvider } from "./ollama.js";
 import { OpenAIProvider } from "./openai.js";
 
 export function createEmbedder(config: RagConfig): EmbeddingProvider {
-  const { provider, baseUrl, model, apiKey } = config.embedding;
+  const { provider, baseUrl, model, apiKey, useProxy } = config.embedding;
 
   switch (provider) {
     case "ollama":
-      return new OllamaProvider(baseUrl, model, apiKey);
+      return new OllamaProvider(baseUrl, model, apiKey, 5000, useProxy);
     case "openai":
       if (!apiKey) {
         throw new Error("OpenAI provider requires an apiKey");

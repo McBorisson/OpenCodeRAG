@@ -82,7 +82,8 @@ describe("OllamaProvider", () => {
         "http://localhost:11434/api",
         "embeddinggemma",
         undefined,
-        1
+        1,
+        true
       );
 
       await assert.rejects(
@@ -107,9 +108,9 @@ describe("OllamaProvider", () => {
       });
       req.on("end", () => {
         assert.equal(req.method, "POST");
-        assert.equal(req.url, "/api/embeddings");
+        assert.equal(req.url, "/api/embed");
         assert.equal(req.headers["content-type"], "application/json");
-        assert.match(body, /"prompt":"hello"/);
+        assert.match(body, /"input":"hello"/);
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ embedding: [1, 2, 3] }));

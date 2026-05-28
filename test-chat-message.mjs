@@ -1,12 +1,20 @@
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { ragPlugin } from './dist/plugin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 async function testChatMessage() {
-  console.log('🧪 Testing chat.message hook...\n');
+  const logFilePath = `${__dirname}\\.opencode\\opencode-rag.log`;
+
+  const log = (message) => {
+    mkdirSync(`${__dirname}\\.opencode`, { recursive: true });
+    appendFileSync(logFilePath, `[${new Date().toISOString()}] [test-chat-message] ${message}\n`, 'utf8');
+  };
+
+  log('🧪 Testing chat.message hook...\n');
   
   const input = {
     directory: __dirname,
@@ -25,27 +33,27 @@ async function testChatMessage() {
     const hooks = await ragPlugin(input);
     
     if (!hooks['chat.message']) {
-      console.error('❌ No chat.message hook found');
+      log('❌ No chat.message hook found');
       process.exit(1);
     }
 
-    console.log('✅ Plugin loaded successfully');
-    console.log(`📝 Input query: "${output.parts[0].text}"\n`);
+    log('✅ Plugin loaded successfully');
+    log(`📝 Input query: "${output.parts[0].text}"\n`);
     
     await hooks['chat.message'](input, output);
     
-    console.log(`\n📊 Output after plugin processing:\n`);
-    console.log(`Total parts: ${output.parts.length}`);
+    log(`\n📊 Output after plugin processing:\n`);
+    log(`Total parts: ${output.parts.length}`);
     
     output.parts.forEach((part, i) => {
       if (part.type === 'text') {
         if (part.text.includes('Retrieved Code Context')) {
-          console.log(`\n✅ Part ${i}: CODE CONTEXT APPENDED`);
+          log(`\n✅ Part ${i}: CODE CONTEXT APPENDED`);
           const lines = part.text.split('\n');
-          lines.forEach(line => console.log('  ' + line));
+          lines.forEach(line => log('  ' + line));
         } else {
-          console.log(`\nPart ${i}: Original query`);
-          console.log(`  "${part.text}"`);
+          log(`\nPart ${i}: Original query`);
+          log(`  "${part.text}"`);
         }
       }
     });
@@ -54,12 +62,12 @@ async function testChatMessage() {
     if (contextPart) {
       const contextLines = contextPart.text.split('\n');
       const fileRefs = contextLines.filter(l => l.includes('.ts') || l.includes('.js'));
-      console.log(`\n📂 Retrieved file references: ${fileRefs.length}`);
-      fileRefs.forEach(ref => console.log(`  ${ref}`));
+      log(`\n📂 Retrieved file references: ${fileRefs.length}`);
+      fileRefs.forEach(ref => log(`  ${ref}`));
     }
     
   } catch (err) {
-    console.error('❌ Error:', err.message);
+    log(`❌ Error: ${err.message}`);
     process.exit(1);
   }
 }

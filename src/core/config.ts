@@ -13,6 +13,7 @@ export interface RagConfig {
     baseUrl: string;
     apiKey?: string;
     model: string;
+    useProxy: boolean;
   };
   indexing: {
     includeExtensions: string[];
@@ -37,6 +38,7 @@ export const DEFAULT_CONFIG: RagConfig = {
     provider: "ollama",
     baseUrl: "http://localhost:11434/api",
     model: "embeddinggemma",
+    useProxy: false,
   },
   indexing: {
     includeExtensions: [

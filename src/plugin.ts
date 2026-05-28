@@ -5,6 +5,8 @@ import { createEmbedder } from "./embedder/factory.js";
 import { LanceDBStore } from "./vectorstore/lancedb.js";
 import { retrieve } from "./retriever/retriever.js";
 import { loadChunkersFromConfig } from "./chunker/loader.js";
+import { appendDebugLog } from "./core/fileLogger.js";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 let config: RagConfig | null = null;
@@ -29,15 +31,23 @@ type ToolExecuteAfterOutput = {
 async function getConfig(directory: string): Promise<RagConfig> {
   if (config) return config;
 
-  for (const loc of ["opencode-rag.json", ".opencode/rag.json"]) {
+  for (const loc of ["opencode-rag.json", ".opencode/opencode-rag.json", ".opencode/rag.json"]) {
+    const configPath = path.join(directory, loc);
+    if (!existsSync(configPath)) {
+      continue;
+    }
+
     try {
-      const configPath = path.join(directory, loc);
       const cfg = loadConfig(configPath);
       await loadChunkersFromConfig(cfg, path.dirname(configPath));
       config = cfg;
       return config;
-    } catch {
-      // continue
+    } catch (err) {
+      appendDebugLog(path.resolve(directory, ".opencode", "opencode-rag.log"), {
+        scope: "config",
+        message: `Failed to load config from ${configPath}`,
+        error: err,
+      });
     }
   }
 
@@ -173,6 +183,7 @@ export const ragPlugin: Plugin = async (
   input: PluginInput,
   _options?: Record<string, unknown>
 ): Promise<Hooks> => {
+  const logFilePath = path.resolve(input.directory, ".opencode", "opencode-rag.log");
   const cfg = await getConfig(input.directory);
 
   if (!cfg.openCode.enabled) {
@@ -195,8 +206,11 @@ export const ragPlugin: Plugin = async (
 
         await appendRetrievedContext(query, output, store, embedder, cfg);
       } catch (err) {
-        // Silently fail - don't break the user's chat if RAG fails
-        console.error("[opencode-rag] chat.message hook error:", err);
+        appendDebugLog(logFilePath, {
+          scope: "chat.message",
+          message: "chat.message hook error",
+          error: err,
+        });
       }
     },
     async "tool.execute.after"(hookInput, output) {
@@ -221,7 +235,11 @@ export const ragPlugin: Plugin = async (
 
         output.output = `${toolOutput}\n${context}`.trim();
       } catch (err) {
-        console.error("[opencode-rag] tool.execute.after hook error:", err);
+        appendDebugLog(logFilePath, {
+          scope: "tool.execute.after",
+          message: "tool.execute.after hook error",
+          error: err,
+        });
       }
     },
   };

@@ -26,6 +26,16 @@ describe("loadConfig", () => {
     assert.deepStrictEqual(config, { ...DEFAULT_CONFIG, chunkers: undefined });
   });
 
+  it("allows partial override of embedding proxy setting", () => {
+    writeFileSync(
+      tmpFile,
+      JSON.stringify({ embedding: { useProxy: true } }),
+      "utf-8"
+    );
+    const config = loadConfig(tmpFile);
+    assert.equal(config.embedding.useProxy, true);
+  });
+
   it("allows partial override of embedding settings", () => {
     writeFileSync(
       tmpFile,
