@@ -3,6 +3,9 @@
 Local-first RAG plugin for OpenCode — semantic code search powered by
 embeddings and vector similarity.
 
+**Note: This is an early beta version and may not always work correctly.
+  If you find bugs, please create an issue.**
+
 ## Features
 
 - **AST-aware chunking** — splits code into functions, classes, methods using
