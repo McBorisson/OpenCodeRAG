@@ -8,12 +8,13 @@ import { retrieve } from "./retriever/retriever.js";
 import { loadChunkersFromConfig } from "./chunker/loader.js";
 import { appendDebugLog } from "./core/fileLogger.js";
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 const configCache = new Map<string, RagConfig>();
 
 const SEARCH_TOOLS = new Set(["glob", "grep", "read", "list"]);
-const CONTEXT_TOOL_NAME = "opencode-rag.context";
+const CONTEXT_TOOL_NAME = "opencode-rag-context";
 const CONTEXT_MARKER = "opencode-rag retrieved context";
 
 type RetrievalQueryHints = {
@@ -26,10 +27,25 @@ type RetrievalQueryHints = {
 type TextPart = {
   type: "text";
   text: string;
+  id: string;
+  sessionID: string;
+  messageID: string;
+};
+
+type MessagePart = {
+  type?: string;
+  text?: string;
+  id?: string;
+  sessionID?: string;
+  messageID?: string;
 };
 
 type MessagePartsOutput = {
-  parts: Array<{ type?: string; text?: string }>;
+  message: {
+    id?: string;
+    sessionID?: string;
+  };
+  parts: MessagePart[];
 };
 
 type ToolExecuteAfterOutput = {
@@ -147,6 +163,27 @@ function hasInjectedContext(parts: Array<{ type?: string; text?: string }>): boo
   );
 }
 
+function buildInjectedTextPart(output: MessagePartsOutput, text: string): TextPart | null {
+  const template = output.parts.find(
+    (part) => typeof part.sessionID === "string" && typeof part.messageID === "string"
+  );
+
+  const sessionID = output.message.sessionID ?? template?.sessionID;
+  const messageID = output.message.id ?? template?.messageID;
+
+  if (!sessionID || !messageID) {
+    return null;
+  }
+
+  return {
+    type: "text",
+    text,
+    id: `prt_${randomUUID().replace(/-/g, "")}`,
+    sessionID,
+    messageID,
+  };
+}
+
 function normalizeToolOutput(output: string): string {
   return output.replace(/\r\n/g, "\n").trim();
 }
@@ -235,14 +272,28 @@ async function appendRetrievedContext(
 
   const merged = await loadRetrievedResults(query, embedder, store, cfg, retrieveFn, cfg.retrieval.topK, extraQuery);
 
-  if (merged.length === 0) return;
+  if (merged.length === 0) {
+    appendVerboseLog(logFilePath, "chat.message", "retrieval produced no context", {
+      query,
+      extraQuery: extraQuery ?? null,
+    });
+    return;
+  }
 
   const context = formatContext(merged);
+  const part = buildInjectedTextPart(output, context);
 
-  output.parts.push({
-    type: "text",
-    text: context,
-  });
+  if (!part) {
+    appendVerboseLog(logFilePath, "chat.message", "skipped context append because message metadata was missing", {
+      query,
+      extraQuery: extraQuery ?? null,
+      message: output.message,
+      parts: output.parts,
+    });
+    return;
+  }
+
+  output.parts.push(part);
 
   appendVerboseLog(logFilePath, "chat.message", "appended retrieved context", {
     query,
@@ -401,7 +452,7 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
   return {
     async event({ event }) {
-      appendVerboseLog(options.logFilePath, "event", "opencode event received", event);
+      //appendVerboseLog(options.logFilePath, "event", "opencode event received", event);
     },
     tool: {
       [CONTEXT_TOOL_NAME]: retrievalTool,
@@ -414,7 +465,7 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
       output.system.unshift(
         [
-          "OpenCodeRAG is available through the `opencode-rag.context` tool.",
+          "OpenCodeRAG is available through the `opencode-rag-context` tool.",
           "Use it before planning, editing, or answering when you need code provenance, surrounding implementation, or file-level evidence.",
           "Prefer narrow queries and add path or language hints when they are known.",
         ].join(" ")

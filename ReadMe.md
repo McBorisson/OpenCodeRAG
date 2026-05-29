@@ -199,7 +199,7 @@ manifest file itself. Press `Ctrl+C` to stop.
 ### OpenCode Plugin
 
 The plugin hooks into:
-1. `opencode-rag.context` to let the agent ask for chunk-level evidence before planning or editing
+1. `opencode-rag-context` to let the agent ask for chunk-level evidence before planning or editing
 2. `chat.message` to retrieve context from the user's prompt before the LLM runs
 3. `tool.execute.after` for `glob`, `grep`, `read`, and `list` so retrieved
   context is also appended when OpenCode searches for files or code
@@ -210,7 +210,7 @@ In both cases it:
 3. Formats top results as code blocks with file path and line numbers
 4. Injects the formatted context back into the active OpenCode flow
 
-The `opencode-rag.context` tool is the preferred entry point for agents when they need file provenance, surrounding implementation details, or a narrow code slice before taking action.
+The `opencode-rag-context` tool is the preferred entry point for agents when they need file provenance, surrounding implementation details, or a narrow code slice before taking action.
 
 Errors during retrieval are silently caught — a failed search won't break the
 chat.

@@ -236,9 +236,8 @@ export async function runIndexPass(options: RunIndexPassOptions): Promise<IndexR
       if (Array.isArray(emb) && emb.length > 0 && typeof emb[0] === "number") {
         chunks[i]!.embedding = emb as number[];
       } else {
-        // Provider returned non-numeric embeddings (e.g. text-only).
-        // Leave `embedding` undefined so the chunk isn't stored in the
-        // vector store (addChunks filters out missing/empty embeddings).
+        // Guard against malformed provider output so the chunk is skipped
+        // instead of corrupting the vector store.
         chunks[i]!.embedding = undefined;
       }
     }

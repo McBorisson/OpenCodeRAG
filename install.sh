@@ -4,7 +4,6 @@ IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
-OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.opencode}"
 PLUGIN_NAME="opencode-rag"
 
 command -v npm >/dev/null 2>&1 || {
@@ -22,11 +21,19 @@ cd "$REPO_ROOT"
 echo "Building $PLUGIN_NAME..."
 npm run build
 
-echo "Installing $PLUGIN_NAME into $OPENCODE_HOME..."
-rm -rf "$OPENCODE_HOME/node_modules/$PLUGIN_NAME"
-npm install --prefix "$OPENCODE_HOME" --legacy-peer-deps "$REPO_ROOT"
+echo "Writing OpenCode local plugin wrapper..."
+mkdir -p "$REPO_ROOT/.opencode/plugins"
+cat > "$REPO_ROOT/.opencode/plugins/package.json" <<'EOF'
+{
+  "type": "module"
+}
+EOF
 
-echo "Refreshing OpenCode plugin registration..."
-opencode plugin "$PLUGIN_NAME" --force --log-level INFO
+cat > "$REPO_ROOT/.opencode/plugins/rag-plugin.js" <<'EOF'
+import { ragPlugin } from "../../dist/plugin.js";
+
+export default ragPlugin;
+export const server = ragPlugin;
+EOF
 
 echo "Done. Restart OpenCode if it is already running."

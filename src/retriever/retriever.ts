@@ -18,8 +18,7 @@ export async function retrieve(
     return [];
   }
 
-  // If the provider returned text (string[][]) instead of numeric vectors,
-  // bail out — we can't perform a vector search without numeric embeddings.
+  // Guard against malformed provider output before searching.
   if (typeof embedding[0] !== "number") {
     return [];
   }
