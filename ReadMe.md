@@ -3,7 +3,7 @@
 Local-first RAG plugin for OpenCode — semantic code search powered by
 embeddings and vector similarity.
 
-**Note: This is an early beta version and may not always work correctly.
+**Note: This is an early pre-release and may not work correctly in all cases.
   If you find bugs, please create an issue.**
 
 ## Features
