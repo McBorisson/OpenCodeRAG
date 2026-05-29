@@ -287,11 +287,13 @@ function formatFileList(results: SearchResult[], worktree: string): string {
     const relPath = path.relative(worktree, filePath);
     const minLine = Math.min(...info.lines);
     const maxLine = Math.max(...info.lines);
+    const relevance = Math.max(...info.scores).toFixed(2);
     const lang = results.find((r) => r.chunk.metadata.filePath === filePath)?.chunk.metadata.language ?? "";
-    lines.push(`${relPath} (${lang}, lines ${minLine}-${maxLine})`);
+    lines.push(`${relPath} (${lang}, lines ${minLine}-${maxLine}, relevance ${relevance})`);
   }
-
-  return lines.join("\n");
+  lines.push(`\n(Showing top ${sorted.length} relevant files. Run "${CONTEXT_TOOL_NAME}" tool with path hints for more targeted context.)`);
+  let linesReturn = lines.join("\n");
+  return linesReturn;
 }
 
 /**

@@ -3,13 +3,13 @@
 ## Project status
 
 MVP implemented. All core modules are built and tested:
-- Chunking (5 languages + fallback)
+- Chunking (17 AST languages + 4 regex-based + 1 PDF text + fallback)
 - Embedding (Ollama + OpenAI)
 - Vector storage (LanceDB)
 - Retrieval pipeline
 - CLI (index, query, clear, status)
 - OpenCode plugin (chat.message hook + background auto-indexing)
-- Test suite (342 tests, 0 failures)
+- Test suite (354 tests, 0 failures)
 
 Design docs: `ReadMe.md` (project docs), `PLANNING.md` (roadmap + brainstorming),
 `docs/designs/2026-05-28-rag-plugin-mvp-design.md` (architecture design).

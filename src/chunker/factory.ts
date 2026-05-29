@@ -18,6 +18,7 @@ import { rustChunker } from "./rust.js";
 import { rubyChunker } from "./ruby.js";
 import { kotlinChunker } from "./kotlin.js";
 import { swiftChunker } from "./swift.js";
+import { texChunker } from "./tex.js";
 import { fallbackChunker } from "./fallback.js";
 import { pdfChunker } from "./pdf.js";
 import { uuid } from "./uuid.js";
@@ -42,6 +43,7 @@ const chunkers: Chunker[] = [
   rubyChunker,
   kotlinChunker,
   swiftChunker,
+  texChunker,
   pdfChunker,
 ];
 
@@ -163,4 +165,4 @@ export async function chunkFile(
   return splitOversized(chunks, filePath);
 }
 
-export { typescriptChunker, pythonChunker, javaChunker, goChunker, markdownChunker, cChunker, cppChunker, csharpChunker, javascriptChunker, razorChunker, jsonChunker, htmlChunker, cssChunker, xmlChunker, slnChunker, rustChunker, rubyChunker, kotlinChunker, swiftChunker, pdfChunker, fallbackChunker };
+export { typescriptChunker, pythonChunker, javaChunker, goChunker, markdownChunker, cChunker, cppChunker, csharpChunker, javascriptChunker, razorChunker, jsonChunker, htmlChunker, cssChunker, xmlChunker, slnChunker, rustChunker, rubyChunker, kotlinChunker, swiftChunker, texChunker, pdfChunker, fallbackChunker };

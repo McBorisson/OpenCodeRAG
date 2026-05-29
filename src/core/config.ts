@@ -99,6 +99,7 @@ export const DEFAULT_CONFIG: RagConfig = {
       ".kt",
       ".kts",
       ".swift",
+      ".tex",
       ".pdf",
     ],
     excludeDirs: [
