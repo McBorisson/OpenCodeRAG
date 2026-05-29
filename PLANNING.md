@@ -2,18 +2,18 @@
 
 ## ✅ Completed (MVP)
 
-- [x] AST-based code chunking (TypeScript, Python, Java, Go, Markdown + fallback)
+- [x] AST-based code chunking (16 languages: TypeScript, Python, Java, Go, C, C++, C#, JavaScript, Rust, Ruby, Kotlin, Swift, JSON, HTML, CSS, XML) + regex chunking (Markdown, Razor, .sln) + line-based fallback
 - [x] Embedding providers (Ollama + OpenAI, factory-pattern dispatch)
 - [x] Vector storage (LanceDB with `memory://` test mode)
 - [x] Retrieval pipeline (embed → search → score → return)
 - [x] CLI (index, query, clear, status via commander)
-- [x] OpenCode plugin (chat.message hook, context injection)
+- [x] OpenCode plugin (opencode-rag-context tool, RAG-backed read override, tool.execute.after for glob/grep/list, experimental.chat.system.transform, background auto-indexing)
 - [x] Pluggable storage via `VectorStore` interface
 - [x] Pluggable chunkers via `Chunker` interface
 - [x] Pluggable embedders via `EmbeddingProvider` interface
 - [x] JSON config with deep-merged partial overrides
 - [x] Batch embedding (configurable batch size)
-- [x] Test suite (60 tests, Node built-in runner)
+- [x] Test suite (342 tests, Node built-in runner)
 
 ## Short Term
 
@@ -158,3 +158,4 @@ Key next steps:
 1. Hybrid search + re-ranking — retrieval quality
 2. Code graph integration — structural code understanding
 3. Context window optimization — better result packing for prompts
+4. Query rewriting / multi-variant expansion

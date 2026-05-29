@@ -33,7 +33,7 @@ export function createBackgroundIndexer(options: CreateBackgroundIndexerOptions)
     store,
     embedder,
     logger: {
-      info: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
+      //info: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
       warn: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
     },
   }).catch((err) => {
@@ -53,7 +53,7 @@ export function createBackgroundIndexer(options: CreateBackgroundIndexerOptions)
         store,
         embedder,
         logger: {
-          info: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
+          //info: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
           warn: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
         },
       });

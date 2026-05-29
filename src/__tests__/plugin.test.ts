@@ -325,7 +325,7 @@ describe("ragPlugin", () => {
     assert.match(output.system[0]!, /Use it before planning/);
   });
 
-  it("does not retrieve context on chat.message (retrieval only on file tool scans)", async () => {
+  it("stores user message text on chat.message without running retrieval", async () => {
     const retrieveShouldNotRun = async () => {
       assert.fail("retrieve should not run on chat.message");
     };
@@ -348,6 +348,13 @@ describe("ragPlugin", () => {
         id: "msg-1",
         role: "user",
         sessionID: "session-1",
+        parts: [{
+          type: "text",
+          text: "show me the OpenAI API files",
+          id: "prt-1",
+          messageID: "msg-1",
+          sessionID: "session-1",
+        }],
       },
       parts: [{
         type: "text",
@@ -358,8 +365,8 @@ describe("ragPlugin", () => {
       }],
     };
 
+    // chat.message should succeed without calling retrieve
     await chatMessageHook?.({ sessionID: "session-1" } as never, output as never);
-
     assert.equal(output.parts.length, 1);
   });
 

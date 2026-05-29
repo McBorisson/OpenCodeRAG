@@ -290,6 +290,38 @@ type CreateRagHooksOptions = {
   embedder?: EmbeddingProvider;
 };
 
+/**
+ * Extract the user message text from chat.message hook input/output.
+ *
+ * Attempts to find the user's message content from output.message first
+ * (via parts/text), then falls back to input fields.
+ */
+function extractUserMessageText(
+  input: { sessionID: string; agent?: string; model?: { providerID: string; modelID: string }; messageID?: string; variant?: string },
+  output?: { message?: unknown; parts?: unknown[] }
+): string {
+  // Try to extract from output.parts first (most common path)
+  if (output?.message) {
+    const msg = output.message as Record<string, unknown>;
+    // Check for parts array in message
+    const parts = (Array.isArray(msg.parts) ? msg.parts : undefined) ?? output.parts;
+    if (parts) {
+      const textParts = parts
+        .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+        .map((p) => (typeof p.text === "string" ? p.text : ""))
+        .filter((t) => t.length > 0);
+      if (textParts.length > 0) {
+        return textParts.join(" ");
+      }
+    }
+    // Check for content string in message
+    if (typeof msg.content === "string" && msg.content.length > 0) {
+      return msg.content;
+    }
+  }
+  return "";
+}
+
 export function createRagHooks(options: CreateRagHooksOptions): Hooks {
   const dependencies: RagPluginDependencies = {
     ...defaultDependencies,
@@ -297,6 +329,10 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
   };
   const embedder = options.embedder ?? dependencies.createEmbedder(options.cfg);
   const store = options.store ?? dependencies.createStore(options.storePath);
+
+  // Session-level caches for lazy retrieval
+  const sessionLastMessage = new Map<string, string>();
+  const sessionRetrievalCache = new Map<string, { messageText: string; rawResults: SearchResult[] }>();
 
   appendDebugLog(options.logFilePath, {
     scope: "plugin",
@@ -425,6 +461,8 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
       embedder,
       store,
       logFilePath: options.logFilePath,
+      sessionLastMessage,
+      sessionRetrievalCache,
     });
   }
 
@@ -453,8 +491,20 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
       output.system.unshift(guidance.join(" "));
     },
-    async "chat.message"(_input) {
-      appendVerboseLog(options.logFilePath, "chat.message", "chat.message hook skipped (retrieval only on file tool scans)");
+    async "chat.message"(input, output) {
+      try {
+        // Extract and store the user message text for lazy retrieval
+        const text = extractUserMessageText(input, output);
+        if (text.length > 0) {
+          sessionLastMessage.set(input.sessionID, text);
+        }
+      } catch (err) {
+        appendDebugLog(options.logFilePath, {
+          scope: "chat.message",
+          message: "failed to extract user message text",
+          error: err,
+        });
+      }
     },
     async "tool.execute.after"(hookInput, output) {
       try {
