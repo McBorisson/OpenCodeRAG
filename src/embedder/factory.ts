@@ -24,13 +24,13 @@ export async function embedBatch(
   embedder: EmbeddingProvider,
   texts: string[],
   batchSize: number = 10
-): Promise<Array<number[] | string[]>> {
-  const results: Array<number[] | string[]> = [];
+): Promise<number[][]> {
+  const results: number[][] = [];
 
   for (let i = 0; i < texts.length; i += batchSize) {
     const batch = texts.slice(i, i + batchSize);
     const embeddings = await embedder.embed(batch);
-    results.push(...(embeddings as Array<number[] | string[]>));
+    results.push(...embeddings);
   }
 
   return results;

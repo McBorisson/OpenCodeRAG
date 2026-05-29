@@ -1,12 +1,9 @@
 import type { EmbeddingProvider } from "../core/interfaces.js";
 import type { ProxyConfig } from "../core/config.js";
+import { postJson } from "./http.js";
 import path from "node:path";
 import { appendDebugLog } from "../core/fileLogger.js";
 
-// OllamaProvider in this branch is configured to operate in a text-only mode
-// — it returns the original input texts instead of numeric vectors. This
-// satisfies the user's request to "Don't return the vectors from ollama,
-// only the text chunks". Consumers must detect and handle `string[][]`.
 export class OllamaProvider implements EmbeddingProvider {
   readonly name = "ollama";
 
@@ -36,11 +33,51 @@ export class OllamaProvider implements EmbeddingProvider {
     });
   }
 
-  // Return the original texts (one per input) as a `string[][]` where each
-  // inner array contains the full text. This intentionally does not call the
-  // Ollama embedding endpoint and does not return numeric vectors.
-  async embed(texts: string[]): Promise<number[][] | string[][]> {
-    this.debug(`OllamaProvider (text-only) returning ${texts.length} text chunks`);
-    return texts.map((t) => [t]);
+  async embed(texts: string[]): Promise<number[][]> {
+    const headers: Record<string, string> = {};
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+
+    this.debug(`OllamaProvider requesting ${texts.length} embedding vector${texts.length === 1 ? "" : "s"}`);
+
+    try {
+      const response = await postJson(
+        `${this.baseUrl}/embed`,
+        { model: this.model, input: texts.length === 1 ? texts[0] : texts },
+        headers,
+        this.timeoutMs,
+        this.proxy
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Ollama embedding failed (${response.status}): ${body}`);
+      }
+
+      const json = (await response.json()) as {
+        embedding?: number[];
+        embeddings?: number[][];
+      };
+
+      if (Array.isArray(json.embeddings) && json.embeddings.every((item) => Array.isArray(item))) {
+        this.debug(`OllamaProvider received ${json.embeddings.length} embedding vector${json.embeddings.length === 1 ? "" : "s"}`);
+        return json.embeddings;
+      }
+
+      if (Array.isArray(json.embedding)) {
+        this.debug("OllamaProvider received 1 embedding vector");
+        return [json.embedding];
+      }
+
+      throw new Error(`Ollama: unexpected response: ${JSON.stringify(json)}`);
+    } catch (error) {
+      if ((error as Error).name === "AbortError" || (error as Error).message === "Aborted") {
+        throw new Error(`Ollama embedding request timed out after ${this.timeoutMs}ms`);
+      }
+
+      this.debug("OllamaProvider embedding request failed", error);
+      throw error;
+    }
   }
 }

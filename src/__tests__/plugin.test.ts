@@ -135,7 +135,7 @@ describe("ragPlugin", () => {
 
       const enabledHooks = await ragPlugin({ directory: enabledDir } as PluginInput, {});
       assert.equal(typeof enabledHooks["chat.message"], "function");
-      assert.ok(enabledHooks.tool?.["opencode-rag.context"]);
+      assert.ok(enabledHooks.tool?.["opencode-rag-context"]);
     } finally {
       rmSync(disabledDir, { recursive: true, force: true });
       rmSync(enabledDir, { recursive: true, force: true });
@@ -175,7 +175,7 @@ describe("ragPlugin", () => {
       dependencies,
     });
 
-    const retrievalTool = hooks.tool?.["opencode-rag.context"] as ToolDefinition;
+    const retrievalTool = hooks.tool?.["opencode-rag-context"] as ToolDefinition;
     assert.ok(retrievalTool, "expected chunk retrieval tool to be registered");
 
     const result = await retrievalTool.execute(
@@ -225,7 +225,7 @@ describe("ragPlugin", () => {
       },
     });
 
-    const retrievalTool = hooks.tool?.["opencode-rag.context"] as ToolDefinition;
+    const retrievalTool = hooks.tool?.["opencode-rag-context"] as ToolDefinition;
     assert.ok(retrievalTool);
 
     const result = await retrievalTool!.execute(
@@ -262,7 +262,60 @@ describe("ragPlugin", () => {
     await systemHook?.({ model: { providerID: "test", modelID: "test" } } as never, output as never);
 
     assert.ok(output.system.length > 0);
-    assert.match(output.system[0]!, /opencode-rag\.context/);
+    assert.match(output.system[0]!, /opencode-rag-context/);
     assert.match(output.system[0]!, /Use it before planning/);
+  });
+
+  it("appends retrieved chunk text to the chat message before tool use", async () => {
+    const { dependencies } = makeDependencies(
+      [
+        makeResult(
+          "chunk-1",
+          "src/embedder/openai.ts",
+          5,
+          12,
+          "typescript",
+          "export class OpenAIProvider implements EmbeddingProvider {}",
+          0.97
+        ),
+      ],
+      1
+    );
+    const hooks = createRagHooks({
+      cfg: makeConfig({
+        openCode: { enabled: true, maxContextChunks: 5 },
+      }),
+      storePath: "memory://",
+      logFilePath: path.join(tmpdir(), "opencode-rag.log"),
+      dependencies,
+    });
+
+    const chatMessageHook = hooks["chat.message"];
+    assert.ok(chatMessageHook);
+
+    const output = {
+      message: {
+        id: "msg-1",
+        role: "user",
+        sessionID: "session-1",
+      },
+      parts: [{
+        type: "text",
+        text: "show me the OpenAI API files",
+        id: "prt-1",
+        messageID: "msg-1",
+        sessionID: "session-1",
+      }],
+    };
+
+    await chatMessageHook?.({ sessionID: "session-1" } as never, output as never);
+
+    assert.equal(output.parts.length, 2);
+    assert.match(output.parts[1]!.text ?? "", /opencode-rag retrieved context/);
+    assert.match(output.parts[1]!.text ?? "", /src\/embedder\/openai\.ts:5-12/);
+    assert.match(output.parts[1]!.text ?? "", /OpenAIProvider/);
+    assert.equal(output.parts[1]!.messageID, "msg-1");
+    assert.equal(output.parts[1]!.sessionID, "session-1");
+    assert.match(output.parts[1]!.id ?? "", /^prt_/);
   });
 });

@@ -35,7 +35,7 @@
   },
   "openCode": {
     "enabled": true,
-    "maxContextChunks": 5
+    "maxContextChunks": 10
   },
   "chunkers": []
 }
