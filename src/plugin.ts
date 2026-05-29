@@ -1,5 +1,6 @@
 import type { Plugin, PluginInput, Hooks } from "@opencode-ai/plugin";
-import type { Chunk, SearchResult } from "./core/interfaces.js";
+import { tool } from "@opencode-ai/plugin/tool";
+import type { EmbeddingProvider, VectorStore, SearchResult } from "./core/interfaces.js";
 import { loadConfig, DEFAULT_CONFIG, type RagConfig } from "./core/config.js";
 import { createEmbedder } from "./embedder/factory.js";
 import { LanceDBStore } from "./vectorstore/lancedb.js";
@@ -9,9 +10,18 @@ import { appendDebugLog } from "./core/fileLogger.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-let config: RagConfig | null = null;
+const configCache = new Map<string, RagConfig>();
 
 const SEARCH_TOOLS = new Set(["glob", "grep", "read", "list"]);
+const CONTEXT_TOOL_NAME = "opencode-rag.context";
+const CONTEXT_MARKER = "opencode-rag retrieved context";
+
+type RetrievalQueryHints = {
+  query: string;
+  pathHints?: string[];
+  languageHints?: string[];
+  topK?: number;
+};
 
 type TextPart = {
   type: "text";
@@ -28,8 +38,31 @@ type ToolExecuteAfterOutput = {
   metadata: unknown;
 };
 
+function appendVerboseLog(
+  logFilePath: string,
+  scope: string,
+  message: string,
+  payload?: unknown
+): void {
+  appendDebugLog(logFilePath, {
+    scope,
+    message: payload
+      ? `${message} ${safeStringify(payload)}`
+      : message,
+  });
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 async function getConfig(directory: string): Promise<RagConfig> {
-  if (config) return config;
+  const cached = configCache.get(directory);
+  if (cached) return cached;
 
   for (const loc of ["opencode-rag.json", ".opencode/opencode-rag.json", ".opencode/rag.json"]) {
     const configPath = path.join(directory, loc);
@@ -40,8 +73,8 @@ async function getConfig(directory: string): Promise<RagConfig> {
     try {
       const cfg = loadConfig(configPath);
       await loadChunkersFromConfig(cfg, path.dirname(configPath));
-      config = cfg;
-      return config;
+      configCache.set(directory, cfg);
+      return cfg;
     } catch (err) {
       appendDebugLog(path.resolve(directory, ".opencode", "opencode-rag.log"), {
         scope: "config",
@@ -51,8 +84,8 @@ async function getConfig(directory: string): Promise<RagConfig> {
     }
   }
 
-  config = DEFAULT_CONFIG;
-  return config;
+  configCache.set(directory, DEFAULT_CONFIG);
+  return DEFAULT_CONFIG;
 }
 
 function formatContext(
@@ -63,7 +96,7 @@ function formatContext(
   const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
 
   const parts: string[] = [];
-  parts.push("\n🧠 **opencode-rag retrieved context** _(context: " + results.length + " chunks, avg relevance: " + avgScore.toFixed(2) + ")_\n");
+  parts.push(`\n**${CONTEXT_MARKER}** _(context: ${results.length} chunks, avg relevance: ${avgScore.toFixed(2)})_\n`);
   parts.push("---\n");
 
   for (const r of results) {
@@ -78,6 +111,22 @@ function formatContext(
 
   parts.push("---\n");
   return parts.join("\n");
+}
+
+function buildRetrievalQuery(hints: RetrievalQueryHints): string {
+  const parts: string[] = [hints.query.trim()];
+
+  const pathHints = hints.pathHints?.map((hint) => hint.trim()).filter((hint) => hint.length > 0) ?? [];
+  if (pathHints.length > 0) {
+    parts.push(`Path hints: ${pathHints.join(", ")}`);
+  }
+
+  const languageHints = hints.languageHints?.map((hint) => hint.trim()).filter((hint) => hint.length > 0) ?? [];
+  if (languageHints.length > 0) {
+    parts.push(`Language hints: ${languageHints.join(", ")}`);
+  }
+
+  return parts.join("\n").trim();
 }
 
 function getQueryFromParts(output: MessagePartsOutput): string {
@@ -144,39 +193,337 @@ function dedupeResults(results: SearchResult[]): SearchResult[] {
 
 async function retrieveContext(
   query: string,
-  embedder: ReturnType<typeof createEmbedder>,
-  store: LanceDBStore,
-  topK: number
+  embedder: EmbeddingProvider,
+  store: VectorStore,
+  topK: number,
+  retrieveFn: typeof retrieve = retrieve
 ): Promise<SearchResult[]> {
   if (query.trim().length === 0) return [];
-  return retrieve(query, embedder, store, { topK });
+  return retrieveFn(query, embedder, store, { topK });
+}
+
+async function loadRetrievedResults(
+  query: string,
+  embedder: EmbeddingProvider,
+  store: VectorStore,
+  cfg: RagConfig,
+  retrieveFn: typeof retrieve = retrieve,
+  topK = cfg.retrieval.topK,
+  extraQuery?: string
+): Promise<SearchResult[]> {
+  const primaryResults = await retrieveContext(query, embedder, store, topK, retrieveFn);
+  const extraResults = extraQuery
+    ? await retrieveContext(extraQuery, embedder, store, topK, retrieveFn)
+    : [];
+
+  return dedupeResults([...primaryResults, ...extraResults])
+    .sort((a, b) => b.score - a.score)
+    .slice(0, cfg.openCode.maxContextChunks);
 }
 
 async function appendRetrievedContext(
+  logFilePath: string,
   query: string,
   output: MessagePartsOutput,
-  store: LanceDBStore,
-  embedder: ReturnType<typeof createEmbedder>,
+  store: VectorStore,
+  embedder: EmbeddingProvider,
   cfg: RagConfig,
+  retrieveFn: typeof retrieve = retrieve,
   extraQuery?: string
 ): Promise<void> {
   if (hasInjectedContext(output.parts)) return;
 
-  const primaryResults = await retrieveContext(query, embedder, store, cfg.retrieval.topK);
-  const extraResults = extraQuery
-    ? await retrieveContext(extraQuery, embedder, store, cfg.retrieval.topK)
-    : [];
-
-  const merged = dedupeResults([...primaryResults, ...extraResults])
-    .sort((a, b) => b.score - a.score)
-    .slice(0, cfg.openCode.maxContextChunks);
+  const merged = await loadRetrievedResults(query, embedder, store, cfg, retrieveFn, cfg.retrieval.topK, extraQuery);
 
   if (merged.length === 0) return;
 
+  const context = formatContext(merged);
+
   output.parts.push({
     type: "text",
-    text: formatContext(merged),
+    text: context,
   });
+
+  appendVerboseLog(logFilePath, "chat.message", "appended retrieved context", {
+    query,
+    extraQuery: extraQuery ?? null,
+    results: merged.map((result) => ({
+      filePath: result.chunk.metadata.filePath,
+      startLine: result.chunk.metadata.startLine,
+      endLine: result.chunk.metadata.endLine,
+      language: result.chunk.metadata.language,
+      score: result.score,
+    })),
+    context,
+  });
+}
+
+type RagPluginDependencies = {
+  createEmbedder: typeof createEmbedder;
+  createStore: (storePath: string) => VectorStore;
+  retrieve: typeof retrieve;
+};
+
+const defaultDependencies: RagPluginDependencies = {
+  createEmbedder,
+  createStore: (storePath) => new LanceDBStore(storePath),
+  retrieve,
+};
+
+type CreateRagHooksOptions = {
+  cfg: RagConfig;
+  storePath: string;
+  logFilePath: string;
+  dependencies?: Partial<RagPluginDependencies>;
+};
+
+export function createRagHooks(options: CreateRagHooksOptions): Hooks {
+  const dependencies: RagPluginDependencies = {
+    ...defaultDependencies,
+    ...options.dependencies,
+  };
+  const embedder = dependencies.createEmbedder(options.cfg);
+  const store = dependencies.createStore(options.storePath);
+
+  appendDebugLog(options.logFilePath, {
+    scope: "plugin",
+    message: "OpenCode plugin initialized",
+  });
+
+  const retrievalTool = tool({
+    description:
+      "Retrieve the most relevant indexed code chunks before planning, answering, or editing. Use it to get file-level evidence, line ranges, and surrounding implementation details.",
+    args: {
+      query: tool.schema.string().min(1, "A retrieval query is required."),
+      pathHints: tool.schema.array(tool.schema.string().min(1)).max(10).optional(),
+      languageHints: tool.schema.array(tool.schema.string().min(1)).max(10).optional(),
+      topK: tool.schema.number().int().min(1).max(25).optional(),
+    },
+    async execute(args) {
+      try {
+        const count = await store.count();
+        if (count === 0) {
+          appendVerboseLog(options.logFilePath, CONTEXT_TOOL_NAME, "retrieval requested but no chunks are indexed", {
+            query: args.query,
+            pathHints: args.pathHints ?? [],
+            languageHints: args.languageHints ?? [],
+            topK: args.topK ?? options.cfg.retrieval.topK,
+          });
+
+          return {
+            title: "OpenCodeRAG context",
+            output:
+              "No indexed chunks are available yet. Run indexing first, then ask again for code context.",
+            metadata: {
+              query: args.query,
+              chunks: 0,
+              indexed: false,
+            },
+          };
+        }
+
+        const query = buildRetrievalQuery({
+          query: args.query,
+          pathHints: args.pathHints,
+          languageHints: args.languageHints,
+        });
+        const topK = args.topK ?? options.cfg.retrieval.topK;
+        const results = await loadRetrievedResults(query, embedder, store, options.cfg, dependencies.retrieve, topK);
+
+        if (results.length === 0) {
+          appendVerboseLog(options.logFilePath, CONTEXT_TOOL_NAME, "retrieval completed with no matching chunks", {
+            query,
+            pathHints: args.pathHints ?? [],
+            languageHints: args.languageHints ?? [],
+            topK,
+          });
+
+          return {
+            title: "OpenCodeRAG context",
+            output: `${CONTEXT_MARKER}\n\nNo indexed chunks matched the query.`,
+            metadata: {
+              query: args.query,
+              chunks: 0,
+              indexed: true,
+            },
+          };
+        }
+
+        const output = formatContext(results);
+
+        appendVerboseLog(options.logFilePath, CONTEXT_TOOL_NAME, "retrieval completed successfully", {
+          query,
+          pathHints: args.pathHints ?? [],
+          languageHints: args.languageHints ?? [],
+          topK,
+          results: results.map((result) => ({
+            filePath: result.chunk.metadata.filePath,
+            startLine: result.chunk.metadata.startLine,
+            endLine: result.chunk.metadata.endLine,
+            language: result.chunk.metadata.language,
+            score: result.score,
+          })),
+          output,
+        });
+
+        return {
+          title: `OpenCodeRAG context (${results.length} chunk${results.length === 1 ? "" : "s"})`,
+          output,
+          metadata: {
+            query: args.query,
+            topK,
+            chunks: results.length,
+            indexed: true,
+            pathHints: args.pathHints ?? [],
+            languageHints: args.languageHints ?? [],
+          },
+        };
+      } catch (err) {
+        appendDebugLog(options.logFilePath, {
+          scope: CONTEXT_TOOL_NAME,
+          message: "chunk retrieval tool error",
+          error: err,
+        });
+
+        return {
+          title: "OpenCodeRAG context",
+          output:
+            "OpenCodeRAG could not retrieve context right now. Try again after indexing or reduce the query scope.",
+          metadata: {
+            query: args.query,
+            chunks: 0,
+            indexed: false,
+          },
+        };
+      }
+    },
+  });
+
+  return {
+    async event({ event }) {
+      appendVerboseLog(options.logFilePath, "event", "opencode event received", event);
+    },
+    tool: {
+      [CONTEXT_TOOL_NAME]: retrievalTool,
+    },
+    async "experimental.chat.system.transform"(_input, output) {
+      appendDebugLog(options.logFilePath, {
+        scope: "experimental.chat.system.transform",
+        message: "system guidance injected",
+      });
+
+      output.system.unshift(
+        [
+          "OpenCodeRAG is available through the `opencode-rag.context` tool.",
+          "Use it before planning, editing, or answering when you need code provenance, surrounding implementation, or file-level evidence.",
+          "Prefer narrow queries and add path or language hints when they are known.",
+        ].join(" ")
+      );
+    },
+    async "chat.message"(_input, output) {
+      try {
+        appendVerboseLog(options.logFilePath, "chat.message", "chat.message hook invoked", {
+          input: _input,
+          output,
+        });
+
+        const count = await store.count();
+
+        if (count === 0) {
+          appendVerboseLog(options.logFilePath, "chat.message", "skipped retrieval because no chunks are indexed", {
+            parts: output.parts,
+          });
+
+          return;
+        }
+
+        const query = getQueryFromParts(output);
+        if (query.length === 0) {
+          appendVerboseLog(options.logFilePath, "chat.message", "skipped retrieval because the query was empty", {
+            parts: output.parts,
+          });
+
+          return;
+        }
+
+        await appendRetrievedContext(options.logFilePath, query, output, store, embedder, options.cfg, dependencies.retrieve);
+      } catch (err) {
+        appendDebugLog(options.logFilePath, {
+          scope: "chat.message",
+          message: "chat.message hook error",
+          error: err,
+        });
+      }
+    },
+    async "tool.execute.after"(hookInput, output) {
+      try {
+        if (!SEARCH_TOOLS.has(hookInput.tool)) return;
+
+        appendVerboseLog(options.logFilePath, "tool.execute.after", `tool.execute.after hook invoked for ${hookInput.tool}`, {
+          input: hookInput,
+          output,
+        });
+
+        const toolOutput = typeof output.output === "string" ? output.output : "";
+        const extraQuery = buildToolQuery(hookInput.tool, toolOutput);
+        if (extraQuery.length === 0) {
+          appendVerboseLog(options.logFilePath, "tool.execute.after", "skipped retrieval because the tool output did not contain usable hints", {
+            tool: hookInput.tool,
+            toolOutput,
+          });
+
+          return;
+        }
+
+        const count = await store.count();
+        if (count === 0) {
+          appendVerboseLog(options.logFilePath, "tool.execute.after", "skipped retrieval because no chunks are indexed", {
+            tool: hookInput.tool,
+            toolOutput,
+            extraQuery,
+          });
+
+          return;
+        }
+
+        const context = formatContext(
+          await loadRetrievedResults(
+            extraQuery,
+            embedder,
+            store,
+            options.cfg,
+            dependencies.retrieve,
+            options.cfg.openCode.maxContextChunks
+          )
+        );
+
+        if (!context) {
+          appendVerboseLog(options.logFilePath, "tool.execute.after", "retrieval produced no context", {
+            tool: hookInput.tool,
+            toolOutput,
+            extraQuery,
+          });
+
+          return;
+        }
+
+        output.output = `${toolOutput}\n${context}`.trim();
+
+        appendVerboseLog(options.logFilePath, "tool.execute.after", "appended retrieval context to tool output", {
+          tool: hookInput.tool,
+          toolOutput,
+          extraQuery,
+          context,
+        });
+      } catch (err) {
+        appendDebugLog(options.logFilePath, {
+          scope: "tool.execute.after",
+          message: "tool.execute.after hook error",
+          error: err,
+        });
+      }
+    },
+  };
 }
 
 export const ragPlugin: Plugin = async (
@@ -190,59 +537,18 @@ export const ragPlugin: Plugin = async (
     return {};
   }
 
-  const embedder = createEmbedder(cfg);
   const storePath = path.resolve(input.directory, cfg.vectorStore.path);
 
-  return {
-    async "chat.message"(_input, output) {
-      try {
-        const store = new LanceDBStore(storePath);
-        const count = await store.count();
+  appendDebugLog(logFilePath, {
+    scope: "plugin",
+    message: `OpenCode plugin enabled for ${input.directory}`,
+  });
 
-        if (count === 0) return; // Nothing indexed yet
-
-        const query = getQueryFromParts(output);
-        if (query.length === 0) return;
-
-        await appendRetrievedContext(query, output, store, embedder, cfg);
-      } catch (err) {
-        appendDebugLog(logFilePath, {
-          scope: "chat.message",
-          message: "chat.message hook error",
-          error: err,
-        });
-      }
-    },
-    async "tool.execute.after"(hookInput, output) {
-      try {
-        if (!SEARCH_TOOLS.has(hookInput.tool)) return;
-
-        const toolOutput = typeof output.output === "string" ? output.output : "";
-        const extraQuery = buildToolQuery(hookInput.tool, toolOutput);
-        if (extraQuery.length === 0) return;
-
-        const store = new LanceDBStore(storePath);
-        const count = await store.count();
-        if (count === 0) return;
-
-        const context = formatContext(
-          dedupeResults(
-            await retrieveContext(extraQuery, embedder, store, cfg.openCode.maxContextChunks)
-          )
-        );
-
-        if (!context) return;
-
-        output.output = `${toolOutput}\n${context}`.trim();
-      } catch (err) {
-        appendDebugLog(logFilePath, {
-          scope: "tool.execute.after",
-          message: "tool.execute.after hook error",
-          error: err,
-        });
-      }
-    },
-  };
+  return createRagHooks({
+    cfg,
+    storePath,
+    logFilePath,
+  });
 };
 
 export default ragPlugin;

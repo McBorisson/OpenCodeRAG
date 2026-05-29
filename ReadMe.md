@@ -18,7 +18,7 @@ embeddings and vector similarity.
 - **Local vector store** — LanceDB with L2 distance scoring, memory mode for
   testing.
 - **CLI** — index, query, clear, status commands.
-- **OpenCode plugin** — injects relevant code context into prompts and file/code
+- **OpenCode plugin** — exposes a chunk retrieval tool and injects relevant code context into prompts and file/code
   search tool results.
 
 ## Architecture
@@ -199,15 +199,18 @@ manifest file itself. Press `Ctrl+C` to stop.
 ### OpenCode Plugin
 
 The plugin hooks into:
-1. `chat.message` to retrieve context from the user's prompt before the LLM runs
-2. `tool.execute.after` for `glob`, `grep`, `read`, and `list` so retrieved
-   context is also appended when OpenCode searches for files or code
+1. `opencode-rag.context` to let the agent ask for chunk-level evidence before planning or editing
+2. `chat.message` to retrieve context from the user's prompt before the LLM runs
+3. `tool.execute.after` for `glob`, `grep`, `read`, and `list` so retrieved
+  context is also appended when OpenCode searches for files or code
 
 In both cases it:
-1. Builds a retrieval query from the prompt or tool output
+1. Builds a retrieval query from the prompt, tool output, or explicit tool arguments
 2. Runs semantic retrieval against the indexed workspace
 3. Formats top results as code blocks with file path and line numbers
 4. Injects the formatted context back into the active OpenCode flow
+
+The `opencode-rag.context` tool is the preferred entry point for agents when they need file provenance, surrounding implementation details, or a narrow code slice before taking action.
 
 Errors during retrieval are silently caught — a failed search won't break the
 chat.
@@ -368,7 +371,7 @@ imports. No test library dependencies.
 
 - Embedding model must support 384-dimensional vectors (default seed row size)
 - 19 built-in chunkers (AST for 16, regex for 3) + configurable fallback
-- Watch mode is CLI-only; the OpenCode plugin augments prompts and file/code search results but does not index automatically
+- Watch mode is CLI-only; the OpenCode plugin augments prompts, exposes a retrieval tool, and updates file/code search results but does not index automatically
 
 ## Privacy
 

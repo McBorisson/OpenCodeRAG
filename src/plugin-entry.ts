@@ -1,4 +1,5 @@
 import { ragPlugin } from "./plugin.js";
 
+export const id = "opencode-rag";
 export const server = ragPlugin;
-export default { server: ragPlugin };
+export default ragPlugin;
