@@ -153,11 +153,16 @@ When behind a corporate proxy:
    - `username`/`password` are sent as `Proxy-Authorization: Basic` header
    - `noProxy` is a comma-separated list of hosts to bypass (localhost always bypassed)
 
-3. **OpenCode plugin 301 redirect fix** — When running inside OpenCode, `http.request()` may route through a global proxy agent patched by OpenCode's runtime. To ensure localhost requests bypass any proxy: `directRequest()` in `http.ts` creates an explicit `http.Agent()` instance (not `http.globalAgent`) and passes it to `transport.request()`. This guarantees the request connects directly regardless of any global agent override.
+3. **OpenCode plugin localhost bypass** — When running inside OpenCode, the runtime can interfere with the normal Node HTTP stack and cause localhost Ollama calls to be redirected or proxied unexpectedly. `directRequest()` in `http.ts` now uses raw `net`/`tls` sockets for direct requests so localhost traffic bypasses the patched HTTP stack entirely.
 
 4. **Proxy auth encoding** — Basic auth is computed in `buildProxyAuthHeader()` in `http.ts`. The `username` and `password` fields are Base64-encoded and sent as the `Proxy-Authorization` header on `fetch()` calls.
 
 5. **Env var override behavior** — If both `HTTP_PROXY` env vars and config `proxy.url` are set, env vars take precedence. If only one is set, it's used. Neither is required.
+
+### Ollama response quirks
+- Ollama may return either `{ embedding: number[] }` or `{ embeddings: number[][] }`; accept both shapes.
+- `embedding.timeoutMs` defaults to 30000 ms. The previous 5000 ms default was too short for cold starts and caused indexing failures.
+- If OpenCode starts returning no context, check whether the embedding call is still reaching the raw socket path before assuming retrieval is empty.
 
 ## Adding a New Language Chunker
 
