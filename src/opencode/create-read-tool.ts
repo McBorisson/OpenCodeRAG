@@ -4,7 +4,7 @@ import type { RagConfig } from "../core/config.js";
 import { retrieve } from "../retriever/retriever.js";
 import { normalizeReadArgs, resolveWorkspacePath } from "./tool-args.js";
 import { buildReadQuery } from "./read-query.js";
-import { formatReadOutput } from "./read-format.js";
+import { formatReadOutput, formatRelatedFiles } from "./read-format.js";
 import {
   missingIndexMessage,
   getNoResultsMessage,
@@ -22,6 +22,10 @@ export interface RagReadToolOptions {
   store: VectorStore;
   /** Optional log file path for debug logging. */
   logFilePath?: string;
+  /** Session-level store for last user message text (keyed by sessionID). */
+  sessionLastMessage?: Map<string, string>;
+  /** Session-level retrieval cache (keyed by sessionID). */
+  sessionRetrievalCache?: Map<string, { messageText: string; rawResults: SearchResult[] }>;
 }
 
 /**
@@ -34,12 +38,13 @@ export interface RagReadToolOptions {
 export function createRagReadTool(
   options: RagReadToolOptions
 ): ReturnType<typeof tool> {
-  const { worktree, config, embedder, store } = options;
+  const { worktree, config, embedder, store, sessionLastMessage, sessionRetrievalCache } = options;
   const openCodeCfg = config.openCode;
   const maxContextChunks = openCodeCfg.maxContextChunks;
   const maxReadOutputChars = openCodeCfg.maxReadOutputChars ?? 20000;
   const noResultsBehavior = openCodeCfg.readNoResultsBehavior ?? "hint";
   const retrievalTopK = maxContextChunks * 4;
+  const readRelatedFilesMax = openCodeCfg.readRelatedFilesMax ?? 5;
 
   return tool({
     description:
@@ -59,7 +64,7 @@ export function createRagReadTool(
       reason: tool.schema.string().optional(),
     },
 
-    async execute(args: Record<string, unknown>) {
+    async execute(args: Record<string, unknown>, ctx?: { sessionID?: string }) {
       try {
         // 1. Normalize and validate arguments
         const normalized = normalizeReadArgs(args as never);
@@ -67,13 +72,9 @@ export function createRagReadTool(
         // 2. Resolve workspace path
         const resolvedPath = resolveWorkspacePath(worktree, normalized.filePath);
 
-        // 3. Build retrieval query
-        const retrievalQuery = buildReadQuery({
-          query: normalized.query,
-          filePath: resolvedPath,
-          startLine: normalized.startLine,
-          endLine: normalized.endLine,
-        });
+        // 3. Build retrieval query (chat-context-aware if available)
+        const sessionID = ctx?.sessionID;
+        const messageText = sessionID ? sessionLastMessage?.get(sessionID) ?? "" : "";
 
         // 4. Check if index exists
         const count = await store.count();
@@ -89,10 +90,38 @@ export function createRagReadTool(
           };
         }
 
-        // 5. Run retrieval with higher topK for filtering
-        const rawResults = await retrieve(retrievalQuery, embedder, store, {
-          topK: retrievalTopK,
-        });
+        // 5. Get or create cached raw results for this session
+        let rawResults: SearchResult[];
+        let retrievalQuery: string;
+
+        if (sessionID && sessionRetrievalCache) {
+          const cached = sessionRetrievalCache.get(sessionID);
+
+          if (cached && cached.messageText === messageText) {
+            // Cache hit — reuse raw results
+            rawResults = cached.rawResults;
+            retrievalQuery = messageText.length > 0
+              ? messageText
+              : (buildReadQuery({ filePath: resolvedPath }).split("\n")[0] ?? "");
+          } else {
+            // Cache miss or new message — run retrieval
+            retrievalQuery = buildSessionQuery(messageText, resolvedPath, normalized);
+            rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK });
+            sessionRetrievalCache.set(sessionID, { messageText, rawResults: rawResults });
+          }
+        } else {
+          // No session/context — direct retrieval
+          retrievalQuery = buildReadQuery({
+            query: normalized.query,
+            filePath: resolvedPath,
+            startLine: normalized.startLine,
+            endLine: normalized.endLine,
+          });
+          rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK });
+        }
+
+        // 6. Collect related files from raw results (before filtering)
+        const relatedFiles = collectRelatedFiles(rawResults, resolvedPath, readRelatedFilesMax);
 
         if (rawResults.length === 0) {
           const output = getNoResultsMessage(noResultsBehavior, resolvedPath);
@@ -108,14 +137,17 @@ export function createRagReadTool(
           };
         }
 
-        // 6. Filter results to the requested file
+        // 7. Filter results to the requested file
         let filtered = rawResults.filter(
           (r) => r.chunk.metadata.filePath === resolvedPath
         );
 
-        // 7. If file has no results, use no-results behavior
+        // 8. If file has no results, use no-results behavior
         if (filtered.length === 0) {
-          const output = getNoResultsMessage(noResultsBehavior, resolvedPath);
+          let output = getNoResultsMessage(noResultsBehavior, resolvedPath);
+          if (readRelatedFilesMax > 0 && relatedFiles.length > 0) {
+            output += "\n\n" + formatRelatedFiles(relatedFiles);
+          }
           return {
             title: "Read (OpenCodeRAG)",
             output,
@@ -128,7 +160,7 @@ export function createRagReadTool(
           };
         }
 
-        // 8. Apply line-range overlap filtering
+        // 9. Apply line-range overlap filtering
         const lineFiltered = applyLineRangeFilter(
           filtered,
           normalized.startLine,
@@ -138,8 +170,8 @@ export function createRagReadTool(
         // Re-sort by score descending
         lineFiltered.sort((a, b) => b.score - a.score);
 
-        // 9. Format output
-        const output = formatReadOutput({
+        // 10. Format output
+        let output = formatReadOutput({
           filePath: resolvedPath,
           retrievalQuery,
           results: lineFiltered,
@@ -147,7 +179,12 @@ export function createRagReadTool(
           maxChars: maxReadOutputChars,
         });
 
-        // 10. Return
+        // 11. Append related files if enabled
+        if (readRelatedFilesMax > 0 && relatedFiles.length > 0) {
+          output += "\n\n" + formatRelatedFiles(relatedFiles);
+        }
+
+        // 12. Return
         return {
           title: `Read (OpenCodeRAG) — ${resolvedPath}`,
           output,
@@ -209,4 +246,82 @@ function applyLineRangeFilter(
     }
     return true;
   });
+}
+
+/** Arguments for building a session-level retrieval query. */
+interface SessionQueryArgs {
+  query?: string;
+  startLine?: number;
+  endLine?: number;
+}
+
+/**
+ * Build a retrieval query from the session's user message plus file path hints.
+ *
+ * When message text is available, it becomes the primary semantic query with
+ * the file path as a targeted hint. When no message text exists, falls back
+ * to the standard file-path-based query.
+ */
+function buildSessionQuery(
+  messageText: string,
+  resolvedPath: string,
+  normalized: SessionQueryArgs
+): string {
+  // Use message text as the semantic query if available
+  if (messageText.length > 0) {
+    // Include file path info so the embedding narrows to that file
+    const parts = [
+      messageText,
+      `Looking for relevant code in file: ${resolvedPath}`,
+    ];
+    if (normalized.startLine !== undefined && normalized.endLine !== undefined) {
+      parts.push(`Focus on lines ${normalized.startLine}-${normalized.endLine}.`);
+    } else if (normalized.startLine !== undefined) {
+      parts.push(`Focus on lines near ${normalized.startLine}.`);
+    }
+    return parts.join("\n");
+  }
+
+  // Fall back to standard query
+  return buildReadQuery({
+    query: normalized.query,
+    filePath: resolvedPath,
+    startLine: normalized.startLine,
+    endLine: normalized.endLine,
+  });
+}
+
+/** A collected related file entry. */
+interface RelatedFileEntry {
+  filePath: string;
+  score: number;
+}
+
+/**
+ * Collect unique related files from raw search results, excluding the
+ * requested file. Keeps the best score per file path and returns at most
+ * `maxRelated` entries sorted by score descending.
+ */
+function collectRelatedFiles(
+  rawResults: SearchResult[],
+  requestedFile: string,
+  maxRelated: number
+): RelatedFileEntry[] {
+  if (maxRelated <= 0 || rawResults.length === 0) return [];
+
+  const bestScore = new Map<string, number>();
+
+  for (const r of rawResults) {
+    const fp = r.chunk.metadata.filePath;
+    if (fp === requestedFile) continue;
+    const current = bestScore.get(fp);
+    if (current === undefined || r.score > current) {
+      bestScore.set(fp, r.score);
+    }
+  }
+
+  return Array.from(bestScore.entries())
+    .map(([filePath, score]) => ({ filePath, score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxRelated);
 }

@@ -104,3 +104,25 @@ function formatChunk(index: number, result: SearchResult): string {
 
   return lines.join("\n");
 }
+
+/** A related file entry with path and score. */
+export interface RelatedFileEntry {
+  filePath: string;
+  score: number;
+}
+
+/**
+ * Format a list of related files as a lightweight suggestion section.
+ *
+ * Only includes file paths and scores — no code content — to keep tokens low.
+ * Format: "Please consider reading other relevant files:\n1. ./path (Score: 0.92)\n..."
+ */
+export function formatRelatedFiles(entries: RelatedFileEntry[]): string {
+  if (entries.length === 0) return "";
+
+  const lines = entries.map(
+    (entry, i) => `${i + 1}. ${entry.filePath} (Score: ${entry.score.toFixed(2)})`
+  );
+
+  return `Please consider reading other relevant files:\n${lines.join("\n")}`;
+}

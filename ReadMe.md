@@ -6,7 +6,8 @@ embeddings and vector similarity.
 ## Features
 
 - **AST-aware chunking** — splits code into functions, classes, methods using
-  tree-sitter (16 languages + 3 markup/config formats). Falls back to line-based chunking for
+  tree-sitter for 16 languages, plus regex-based chunking for 3 markup/config
+  formats (Markdown, Razor, .sln). Falls back to line-based chunking for
   unrecognized formats.
 - **Incremental indexing** — manifest-backed indexing skips unchanged files,
   removes deleted entries, and updates only changed files.
@@ -99,7 +100,8 @@ Create `opencode-rag.json` in the project root (auto-detected) or pass via
   "indexing": {
     "includeExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".java", ".go", ".rs", ".rb", ".kt", ".kts", ".swift", ".md", ".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hxx", ".cs", ".aspx", ".razor", ".cshtml", ".json", ".html", ".htm", ".css", ".xml", ".csproj", ".sln"],
     "excludeDirs": ["node_modules", ".git", ".opencode", "dist", "build", "__pycache__", ".venv"],
-    "chunkOverlap": 0
+    "chunkOverlap": 0,
+    "minFileSizeBytes": 1024
   },
   "vectorStore": {
     "path": "./.opencode/rag_db"
@@ -113,7 +115,12 @@ Create `opencode-rag.json` in the project root (auto-detected) or pass via
     "overrideRead": true,
     "allowRangeReadFallback": false,
     "maxReadOutputChars": 20000,
-    "readNoResultsBehavior": "hint"
+    "readNoResultsBehavior": "hint",
+    "autoIndex": {
+      "enabled": true,
+      "debounceMs": 5000,
+      "intervalMs": 300000
+    }
   },
   "logging": {
     "level": "info",
@@ -402,13 +409,15 @@ Project structure:
 ```
 src/
   core/          — interfaces.ts, config.ts
-  chunker/       — grammar.ts, base.ts, language chunkers, fallback.ts, factory.ts, loader.ts
+  chunker/       — grammar.ts, base.ts, language chunkers, fallback.ts, factory.ts, uuid.ts
   embedder/      — ollama.ts, openai.ts, factory.ts
-  indexer.ts     — incremental indexing + watch scheduling
+  opencode/      — create-read-tool.ts, read-fallback.ts, read-query.ts, tool-args.ts, read-format.ts
   vectorstore/   — lancedb.ts
   retriever/     — retriever.ts
   types/         — opencode-plugin.d.ts
-  cli.ts, plugin.ts, index.ts
+  indexer.ts     — incremental indexing + watch scheduling
+  watcher.ts     — background indexer (chokidar + debounced scheduler + periodic timer)
+  cli.ts, plugin.ts, plugin-entry.ts, index.ts
   __tests__/     — mirrors the module structure
 ```
 
@@ -417,7 +426,7 @@ imports. No test library dependencies.
 
 ## Limitations
 
-- Embedding model must support 384-dimensional vectors (default seed row size)
+- Embedding model dimension is auto-probed at startup; falls back to 384 if probing fails.
 - 19 built-in chunkers (AST for 16, regex for 3) + configurable fallback
 - The read override tool requires the file to be indexed — non-indexed files return a no-results message (configurable via `readNoResultsBehavior`)
 

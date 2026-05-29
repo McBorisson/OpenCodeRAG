@@ -52,6 +52,7 @@ export interface RagConfig {
     allowRangeReadFallback?: boolean;
     maxReadOutputChars?: number;
     readNoResultsBehavior?: ReadNoResultsBehavior;
+    readRelatedFilesMax?: number;
   };
   chunkers?: ChunkerConfig[];
   logging: LoggingConfig;
@@ -130,6 +131,7 @@ export const DEFAULT_CONFIG: RagConfig = {
     allowRangeReadFallback: false,
     maxReadOutputChars: 20000,
     readNoResultsBehavior: "hint",
+    readRelatedFilesMax: 5,
     autoIndex: {
       enabled: true,
       debounceMs: 5000,
