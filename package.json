@@ -1,5 +1,5 @@
 {
-  "name": "opencoderag",
+  "name": "opencode-rag-plugin",
   "version": "1.0.0",
   "description": "OpenCode plugin for local-first RAG-based semantic code search",
   "type": "module",
@@ -54,12 +54,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/OpenCodeRAG.git"
+    "url": "git+https://github.com/MrDoe/OpenCodeRAG.git"
   },
   "bugs": {
-    "url": "https://github.com/anomalyco/OpenCodeRAG/issues"
+    "url": "https://github.com/MrDoe/OpenCodeRAG/issues"
   },
-  "homepage": "https://github.com/anomalyco/OpenCodeRAG#readme",
+  "homepage": "https://github.com/MrDoe/OpenCodeRAG#readme",
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.0.0"
   },

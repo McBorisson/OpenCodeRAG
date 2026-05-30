@@ -3,8 +3,7 @@
 Local-first RAG plugin for OpenCode — semantic code search powered by
 embeddings and vector similarity.
 
-**Note: This is an early pre-release and may not work correctly in all cases.
-  If you find bugs, please create an issue.**
+**Published on npm as [`opencode-rag-plugin`](https://www.npmjs.com/package/opencode-rag-plugin).**
 
 ## Features
 
@@ -69,9 +68,11 @@ Workspace Files
 ## Installation
 
 ```bash
-git clone <repo-url>
-cd OpenCodeRAG
-npm install --legacy-peer-deps
+# Install globally
+npm install -g opencode-rag-plugin
+
+# Or in your project
+npm install --save-dev opencode-rag-plugin
 ```
 
 ### Dependencies
@@ -112,22 +113,22 @@ This extension consists of two main interfaces:
 
 ```bash
 # Index the workspace incrementally
-npx tsx src/cli.ts index
+opencode-rag index
 
 # Force full re-index (clears existing data first)
-npx tsx src/cli.ts index --force
+opencode-rag index --force
 
 # Watch workspace and incrementally re-index on changes
-npx tsx src/cli.ts index --watch
+opencode-rag index --watch
 
 # Semantic search
-npx tsx src/cli.ts query "How is authentication handled?"
+opencode-rag query "How is authentication handled?"
 
 # Limit results
-npx tsx src/cli.ts query "error handling" --top-k 5
+opencode-rag query "error handling" --top-k 5
 
 # Show indexing stats
-npx tsx src/cli.ts status
+opencode-rag status
 
 # Example output:
 #   Indexed chunks:    1247
@@ -142,10 +143,10 @@ npx tsx src/cli.ts status
 #   Watch mode:        off
 
 # Clear all indexed data
-npx tsx src/cli.ts clear
+opencode-rag clear
 
 # Use custom config
-npx tsx src/cli.ts index --config ./my-config.json
+opencode-rag index --config ./my-config.json
 ```
 
 `index` is incremental by default. A sidecar manifest is stored at
@@ -159,7 +160,7 @@ store to avoid duplicates.
 Start a watch session:
 
 ```bash
-npx tsx src/cli.ts index --watch
+opencode-rag index --watch
 ```
 
 The initial pass indexes the workspace, then watches for file changes. On each
@@ -215,8 +216,8 @@ npm run build
 npm pack
 opencode plugin .\opencode-rag-0.1.0.tgz
 
-# Option 3: Install from npm (once published)
-opencode plugin opencode-rag
+# Option 3: Install from npm
+opencode plugin opencode-rag-plugin
 ```
 
 The plugin auto-detects configuration from `opencode-rag.json` or
@@ -274,7 +275,7 @@ suggestions to the message. Look for lines like
 ### Indexing
 - The plugin auto-indexes changed files in the background (debounced 5s)
 - If no results come back, the workspace may not be indexed yet —
-  run `opencode-rag index` from the terminal
+  run `opencode-rag index` from the terminal (or `npx opencode-rag-plugin`)  
 - Tiny files (under 1 KB), excluded extensions, and excluded directories
   (`node_modules`, `.git`, `.opencode`, `dist`, etc.) are silently skipped
 ```
@@ -360,7 +361,7 @@ interface Chunker {
 ### Programmatic
 
 ```typescript
-import { registerChunker } from "opencode-rag/library";
+import { registerChunker } from "opencode-rag-plugin/library";
 registerChunker(myChunker, [".rs"]);
 ```
 

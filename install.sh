@@ -4,7 +4,7 @@ IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
-PLUGIN_NAME="opencode-rag"
+PLUGIN_NAME="opencode-rag-plugin"
 CLI_BIN_DIR="$HOME/.local/bin"
 GLOBAL_OPENCODE="$HOME/.config/opencode"
 
@@ -71,7 +71,7 @@ npm run build
 echo "Installing globally in OpenCode (~/.config/opencode)..."
 mkdir -p "$GLOBAL_OPENCODE"
 
-rm -rf "$GLOBAL_OPENCODE/node_modules/opencode-rag"
+rm -rf "$GLOBAL_OPENCODE/node_modules/$PLUGIN_NAME"
 PACKED=$(npm pack --pack-destination "$GLOBAL_OPENCODE" 2>&1 | tail -1)
 npm install --prefix "$GLOBAL_OPENCODE" --silent "$GLOBAL_OPENCODE/$PACKED"
 
@@ -80,38 +80,38 @@ mkdir -p "$CLI_BIN_DIR"
 rm -f "$CLI_BIN_DIR/opencode-rag"
 cat > "$CLI_BIN_DIR/opencode-rag" << WRAPPER
 #!/usr/bin/env bash
-exec node "$HOME/.config/opencode/node_modules/opencode-rag/dist/cli.js" "\$@"
+exec node "$HOME/.config/opencode/node_modules/$PLUGIN_NAME/dist/cli.js" "\$@"
 WRAPPER
 chmod +x "$CLI_BIN_DIR/opencode-rag"
 
 echo "Registering plugin with OpenCode..."
 if [ -f "$GLOBAL_OPENCODE/opencode.jsonc" ]; then
-  if ! grep -q "\"opencode-rag\"" "$GLOBAL_OPENCODE/opencode.jsonc"; then
+  if ! grep -q "\"$PLUGIN_NAME\"" "$GLOBAL_OPENCODE/opencode.jsonc"; then
     TEMP=$(mktemp)
     node -e "
       const fs = require('fs');
-      const c = JSON.parse(fs.readFileSync('$GLOBAL_OPENCODE/opencode.jsonc','utf8'));
+      const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
       c.plugin = c.plugin || [];
-      c.plugin.push('opencode-rag');
-      fs.writeFileSync(process.argv[1], JSON.stringify(c, null, 2) + '\n');
-    " "$TEMP"
+      c.plugin.push('$PLUGIN_NAME');
+      fs.writeFileSync(process.argv[2], JSON.stringify(c, null, 2) + '\n');
+    " "$GLOBAL_OPENCODE/opencode.jsonc" "$TEMP"
     mv "$TEMP" "$GLOBAL_OPENCODE/opencode.jsonc"
   fi
 elif [ -f "$GLOBAL_OPENCODE/opencode.json" ]; then
-  if ! grep -q "\"opencode-rag\"" "$GLOBAL_OPENCODE/opencode.json"; then
+  if ! grep -q "\"$PLUGIN_NAME\"" "$GLOBAL_OPENCODE/opencode.json"; then
     node -e "
       const fs = require('fs');
-      const c = JSON.parse(fs.readFileSync('$GLOBAL_OPENCODE/opencode.json','utf8'));
+      const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
       c.plugin = c.plugin || [];
-      c.plugin.push('opencode-rag');
-      fs.writeFileSync('$GLOBAL_OPENCODE/opencode.json', JSON.stringify(c, null, 2) + '\n');
-    "
+      c.plugin.push('$PLUGIN_NAME');
+      fs.writeFileSync(process.argv[1], JSON.stringify(c, null, 2) + '\n');
+    " "$GLOBAL_OPENCODE/opencode.json"
   fi
 else
   cat > "$GLOBAL_OPENCODE/opencode.jsonc" << JSONEOF
 {
   "\$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-rag"]
+  "plugin": ["$PLUGIN_NAME"]
 }
 JSONEOF
 fi

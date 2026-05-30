@@ -235,6 +235,6 @@ suggestions to the message. Look for lines like
 ### Indexing
 - The plugin auto-indexes changed files in the background (debounced 5s)
 - If no results come back, the workspace may not be indexed yet —
-  run `opencode-rag index` from the terminal
+  run `opencode-rag index` from the terminal (or `npx opencode-rag-plugin`)
 - Tiny files (under 1 KB), excluded extensions, and excluded directories
   (`node_modules`, `.git`, `.opencode`, `dist`, etc.) are silently skipped
