@@ -26,6 +26,30 @@ function ok { Write-Host "  $($args[0])  OK" -ForegroundColor Green }
 
 function fail_msg { Write-Host "  $($args[0])  FAILED" -ForegroundColor Red }
 
+function ensure_user_path_contains {
+    param([string]$Dir)
+
+    if (-not (Test-Path -LiteralPath $Dir -PathType Container)) {
+        return $false
+    }
+
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ([string]::IsNullOrWhiteSpace($userPath)) {
+        [Environment]::SetEnvironmentVariable("Path", $Dir, "User")
+        return $true
+    }
+
+    $entries = $userPath -split ";" | Where-Object { $_ -and $_.Trim().Length -gt 0 }
+    foreach ($entry in $entries) {
+        if ($entry.TrimEnd('\\') -ieq $Dir.TrimEnd('\\')) {
+            return $false
+        }
+    }
+
+    [Environment]::SetEnvironmentVariable("Path", "$userPath;$Dir", "User")
+    return $true
+}
+
 function test_node_resolution {
     param(
         [string]$ModuleName,
@@ -246,6 +270,11 @@ Remove-Item -Path "$CLI_BIN_DIR\opencode-rag.ps1" -Force -ErrorAction SilentlyCo
 "@ | Set-Content -LiteralPath "$CLI_BIN_DIR\opencode-rag.ps1" -Encoding UTF8
 ok "$CLI_BIN_DIR\opencode-rag.ps1"
 
+$pathUpdated = ensure_user_path_contains $CLI_BIN_DIR
+if ($pathUpdated) {
+    info "Added $CLI_BIN_DIR to your user PATH"
+}
+
 # Clean up old workspace-local wrappers (legacy)
 Remove-Item -Path "$REPO_ROOT\.opencode\plugins\rag-plugin.js" -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "$REPO_ROOT\.opencode\plugins\package.json" -Force -ErrorAction SilentlyContinue
@@ -311,4 +340,7 @@ Write-Host "  2. In any workspace where you want RAG context, create a config fi
 Write-Host "     at PROJECT_ROOT\opencode-rag.json (or copy from $REPO_ROOT\opencode-rag.json)."
 Write-Host "  3. Run 'opencode-rag index' from that workspace to index its files."
 Write-Host "  4. OpenCode will automatically use the indexed data for context-aware queries."
+if ($pathUpdated) {
+    Write-Host "  5. In your current PowerShell session run: `$env:Path += ';$CLI_BIN_DIR'"
+}
 Write-Host "`nRun '$PSCommandPath uninstall' to remove."
