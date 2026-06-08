@@ -21,6 +21,9 @@ import { swiftChunker } from "./swift.js";
 import { texChunker } from "./tex.js";
 import { fallbackChunker } from "./fallback.js";
 import { pdfChunker } from "./pdf.js";
+import { docxChunker } from "./docx.js";
+import { docChunker } from "./doc.js";
+import { excelChunker } from "./excel.js";
 import { uuid } from "./uuid.js";
 
 const chunkers: Chunker[] = [
@@ -45,6 +48,9 @@ const chunkers: Chunker[] = [
   swiftChunker,
   texChunker,
   pdfChunker,
+  docxChunker,
+  docChunker,
+  excelChunker,
 ];
 
 const extensionMap = new Map<string, Chunker>();

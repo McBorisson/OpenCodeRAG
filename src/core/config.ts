@@ -106,6 +106,10 @@ export const DEFAULT_CONFIG: RagConfig = {
       ".swift",
       ".tex",
       ".pdf",
+      ".docx",
+      ".doc",
+      ".xls",
+      ".xlsx",
     ],
     excludeDirs: [
       "node_modules",

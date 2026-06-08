@@ -2,6 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { chunkFile } from "./chunker/factory.js";
 import { extractPdfText } from "./chunker/pdf.js";
+import { extractDocxText } from "./chunker/docx.js";
+import { extractDocText } from "./chunker/doc.js";
+import { extractExcelText } from "./chunker/excel.js";
 import type { RagConfig } from "./core/config.js";
 import {
   computeFileHash,
@@ -112,6 +115,9 @@ async function scanWorkspace(cwd: string, config: RagConfig): Promise<WorkspaceF
   );
 
   const isPdf = (fp: string) => fp.toLowerCase().endsWith(".pdf");
+  const isDocx = (fp: string) => fp.toLowerCase().endsWith(".docx");
+  const isDoc = (fp: string) => fp.toLowerCase().endsWith(".doc");
+  const isExcel = (fp: string) => { const e = fp.toLowerCase(); return e.endsWith(".xls") || e.endsWith(".xlsx"); };
 
   const minSize = config.indexing.minFileSizeBytes ?? 0;
   const workspaceFiles: WorkspaceFile[] = [];
@@ -120,6 +126,15 @@ async function scanWorkspace(cwd: string, config: RagConfig): Promise<WorkspaceF
     if (isPdf(filePath)) {
       const buffer = await fs.readFile(filePath);
       content = await extractPdfText(buffer);
+    } else if (isDocx(filePath)) {
+      const buffer = await fs.readFile(filePath);
+      content = await extractDocxText(buffer);
+    } else if (isDoc(filePath)) {
+      const buffer = await fs.readFile(filePath);
+      content = await extractDocText(buffer);
+    } else if (isExcel(filePath)) {
+      const buffer = await fs.readFile(filePath);
+      content = await extractExcelText(buffer);
     } else {
       content = await fs.readFile(filePath, "utf-8");
     }

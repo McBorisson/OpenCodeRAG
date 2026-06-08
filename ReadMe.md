@@ -330,6 +330,9 @@ interface SearchResult {
 | Swift      | AST (tree-sitter)              | functions, classes, structs, enums, protocols, extensions, variables |
 | LaTeX      | Regex section split            | chapter/section/subsection/subsubsection boundaries |
 | PDF        | Paragraph-based (text extraction) | groups small paragraphs, splits oversized |
+| Word (docx) | Paragraph-based (text extraction) | extracts raw text via mammoth, groups small paragraphs, splits oversized |
+| Word (doc) | Paragraph-based (text extraction) | extracts raw text via word-extractor, groups small paragraphs, splits oversized |
+| Excel (xls/xlsx) | Row-batch (text extraction) | extracts CSV per sheet via @e965/xlsx, splits by sheet then by row batches |
 | (other)    | Line-based (100 lines/chunk)   | raw text blocks                           |
 
 Custom chunkers can be added without modifying the project source code. Two
