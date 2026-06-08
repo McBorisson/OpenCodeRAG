@@ -26,6 +26,16 @@ function ok { Write-Host "  $($args[0])  OK" -ForegroundColor Green }
 
 function fail_msg { Write-Host "  $($args[0])  FAILED" -ForegroundColor Red }
 
+function test_node_resolution {
+    param(
+        [string]$ModuleName,
+        [string]$BaseDir
+    )
+
+    & node -e "const moduleName=process.argv[1];const baseDir=process.argv[2];try{require.resolve(moduleName,{paths:[baseDir]});}catch{process.exit(1);}" -- $ModuleName $BaseDir 2>$null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function cleanup_tgz {
     Remove-Item -Path "$GLOBAL_CONFIG\$PLUGIN_NAME-*.tgz" -Force -ErrorAction SilentlyContinue
 }
@@ -271,24 +281,16 @@ else {
     fail_msg "CLI wrapper"; $verified = $false
 }
 
-# Node resolution check (runtime) - chdir to avoid CWD-based resolution interference
-node -e @'
-process.chdir(require("os").tmpdir());
-try { require.resolve(process.argv[2], {paths:[process.argv[3]]}); } catch(e) { process.exit(1); }
-'@ $PLUGIN_NAME $RUNTIME_DIR 2>$null
-if ($LASTEXITCODE -eq 0) {
+# Node resolution check (runtime)
+if (test_node_resolution $PLUGIN_NAME $RUNTIME_DIR) {
     ok "Node resolution (runtime)"
 }
 else {
     fail_msg "Node resolution (runtime)"; $verified = $false
 }
 
-# Node resolution check (config) - chdir to avoid CWD-based resolution interference
-node -e @'
-process.chdir(require("os").tmpdir());
-try { require.resolve(process.argv[2], {paths:[process.argv[3]]}); } catch(e) { process.exit(1); }
-'@ $PLUGIN_NAME $GLOBAL_CONFIG 2>$null
-if ($LASTEXITCODE -eq 0) {
+# Node resolution check (config)
+if (test_node_resolution $PLUGIN_NAME $GLOBAL_CONFIG) {
     ok "Node resolution (config)"
 }
 else {
