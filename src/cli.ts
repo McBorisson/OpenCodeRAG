@@ -11,6 +11,7 @@ import { loadChunkersFromConfig } from "./chunker/loader.js";
 import { createEmbedder } from "./embedder/factory.js";
 import { LanceDBStore } from "./vectorstore/lancedb.js";
 import { retrieve } from "./retriever/retriever.js";
+import type { KeywordIndex } from "./core/interfaces.js";
 import {
   createWatchPassScheduler,
   createWatchIgnore,
@@ -74,6 +75,18 @@ async function resolveConfig(opt: CliOptions, logFilePath: string): Promise<RagC
   }
   logCliInfo(logFilePath, "config", `Config: using defaults (no opencode-rag.json found)`);
   return logConfigDetails(logFilePath, DEFAULT_CONFIG);
+}
+
+async function loadCliKeywordIndex(storePath: string, logFilePath: string): Promise<KeywordIndex | undefined> {
+  const { KeywordIndex } = await import("./retriever/keyword-index.js");
+  try {
+    const index = await KeywordIndex.load(storePath);
+    logCliInfo(logFilePath, "keyword-index", `Keyword index loaded (${index.count()} chunks)`);
+    return index;
+  } catch {
+    logCliInfo(logFilePath, "keyword-index", "Creating keyword index");
+    return new KeywordIndex(storePath);
+  }
 }
 
 function logConfigDetails(logFilePath: string, config: RagConfig): RagConfig {
@@ -322,6 +335,8 @@ program
         vectorDimension
       );
 
+      const keywordIndex = await loadCliKeywordIndex(path.resolve(cwd, config.vectorStore.path), logFilePath);
+
       logCliInfo(logFilePath, "index", `Scanning: ${cwd}`);
       const runPass = async (watchTriggered: boolean = false): Promise<void> => {
         const passStarted = Date.now();
@@ -331,6 +346,7 @@ program
           config,
           store,
           embedder,
+          keywordIndex,
           force: Boolean(options.force && !watchTriggered),
           logger: {
             info: (message) => logCliInfo(logFilePath, "index", message),
@@ -433,7 +449,9 @@ program
 
       const topK = parseInt(options.topK ?? "10", 10);
       const minScore = config.retrieval.minScore;
-      const results = await retrieve(query, embedder, store, { topK, minScore });
+      const keywordIndex = await loadCliKeywordIndex(path.resolve(cwd, config.vectorStore.path), logFilePath);
+      const hybridCfg = config.retrieval.hybridSearch;
+      const results = await retrieve(query, embedder, store, { topK, minScore, keywordIndex, keywordWeight: hybridCfg?.keywordWeight });
 
       if (results.length === 0) {
         logCliInfo(logFilePath, "query", "No results found.");
@@ -481,7 +499,9 @@ program
 
       logCliInfo(logFilePath, "clear", `Clearing ${prevCount} indexed chunks...`);
       await store.clear();
-      logCliInfo(logFilePath, "clear", `Done. ${prevCount} chunks removed.`);
+      const { KeywordIndex } = await import("./retriever/keyword-index.js");
+      await KeywordIndex.clearFile(path.resolve(cwd, config.vectorStore.path));
+      logCliInfo(logFilePath, "clear", `Done. ${prevCount} chunks removed, keyword index cleared.`);
     } catch (err) {
       const message = (err as Error).message || String(err);
       const logFilePath = path.resolve(process.cwd(), ".opencode", "opencode-rag.log");
@@ -525,6 +545,10 @@ program
       logCliInfo(logFilePath, "status", `Up-to-date files:  ${summary.upToDateFiles}`);
       logCliInfo(logFilePath, "status", `Pending files:     ${summary.pendingFiles}`);
       logCliInfo(logFilePath, "status", `Watch mode:        off`);
+      const kiCount = config.retrieval.hybridSearch?.enabled
+        ? (await loadCliKeywordIndex(path.resolve(cwd, config.vectorStore.path), logFilePath))?.count() ?? 0
+        : 0;
+      logCliInfo(logFilePath, "status", `Keyword index:     ${config.retrieval.hybridSearch?.enabled ? "enabled" : "disabled"} (${kiCount} chunks)`);
       if (summary.rebuildRequired) {
         logCliInfo(logFilePath, "status", `Rebuild required:  yes (manifest missing/corrupt)`);
       }
@@ -563,7 +587,7 @@ function generateDefaultConfigJson(): string {
       openCode: {
         enabled: DEFAULT_CONFIG.openCode.enabled,
         maxContextChunks: DEFAULT_CONFIG.openCode.maxContextChunks,
-        overrideRead: DEFAULT_CONFIG.openCode.overrideRead,
+        readOverride: DEFAULT_CONFIG.openCode.readOverride,
         autoIndex: {
           enabled: DEFAULT_CONFIG.openCode.autoIndex!.enabled,
           debounceMs: DEFAULT_CONFIG.openCode.autoIndex!.debounceMs,

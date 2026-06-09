@@ -18,6 +18,7 @@ embeddings and vector similarity.
 - **Pluggable chunkers** — add custom language chunkers via config or programmatic API.
 - **Configurable embeddings** — Ollama (default) or OpenAI-compatible providers.
   Batch embedding with configurable batch size.
+- **Hybrid search** — TF×IDF keyword index combined with vector search (weighted fusion) for improved precision on code identifiers and function names.
 - **Local vector store** — LanceDB with L2 distance scoring, memory mode for
   testing.
 - **CLI** — index, query, clear, status commands.
@@ -132,8 +133,6 @@ After uninstallation, restart OpenCode if it is running.
 
 ### Dependencies
 
-### Dependencies
-
 - **Node.js v22+** for native ESM and fetch support
 - **apache-arrow** — peer dependency for LanceDB (auto-installed)
 - **tree-sitter-wasm** — ships pre-built WASM grammars for all supported languages
@@ -197,7 +196,7 @@ opencode-rag status
 #   Last indexed:      2026-05-28 10:45:02
 #   Up-to-date files:  42
 #   Pending files:     0
-#   Watch mode:        off
+#   Keyword index:     enabled (1274 chunks)
 
 # Clear all indexed data
 opencode-rag clear
@@ -263,13 +262,15 @@ The auto-injection saves a tool-call round-trip for ~70% of code-related message
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `openCode.overrideRead` | `false` | Set to `true` to restore the legacy RAG-backed `read` tool (deprecated) |
+| `openCode.readOverride` | `false` | Set to `true` to register a RAG-backed `read` tool that shadows OpenCode's built-in read. When enabled, agent read requests return indexed code chunks instead of full file contents. |
 | `openCode.maxContextChunks` | `5` | Maximum chunks per retrieval (affects `opencode-rag-context` tool output) |
 | `openCode.autoInject.enabled` | `true` | Enable/disable auto-injection of high-confidence chunks |
 | `openCode.autoInject.minScore` | `0.75` | Minimum relevance score for auto-injection (0–1) |
 | `openCode.autoInject.maxChunks` | `3` | Maximum chunks to auto-inject per message |
 | `openCode.autoInject.maxTokens` | `2000` | Token budget for injected content (estimated at ~4 chars/token) |
 | `retrieval.topK` | `10` | Number of chunks fetched per query (controls chat.message file suggestion breadth) |
+| `retrieval.hybridSearch.enabled` | `true` | Enable/disable hybrid search (TF×IDF keyword + vector) |
+| `retrieval.hybridSearch.keywordWeight` | `0.4` | Weight for keyword scores in hybrid fusion (0–1). Higher = more keyword influence. |
 
 Errors during retrieval are silently caught — a failed search won't break the
 chat.
@@ -497,7 +498,7 @@ imports. No test library dependencies.
 ## Limitations
 
 - Embedding model dimension is auto-probed at startup; falls back to 384 if probing fails.
-- 21 built-in chunkers (AST for 16, regex for 4, PDF text for 1) + configurable fallback
+- 24 built-in chunkers (AST for 16, regex for 4, document text extraction for 4) + configurable fallback
 
 ## Privacy
 
