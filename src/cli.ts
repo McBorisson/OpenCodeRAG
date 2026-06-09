@@ -687,7 +687,9 @@ export function shouldAutoRunCli(moduleUrl: string, argv1?: string): boolean {
   }
 
   try {
-    return moduleUrl === `file://${realpathSync(argv1).replace(/\\/g, "/")}`;
+    const resolvedPath = realpathSync(argv1).replace(/\\/g, "/");
+    const normalizedUrl = moduleUrl.replace(/\\/g, "/");
+    return normalizedUrl === `file://${resolvedPath}` || normalizedUrl.endsWith(`/${resolvedPath}`) || normalizedUrl.includes(resolvedPath);
   } catch {
     return false;
   }
@@ -695,6 +697,14 @@ export function shouldAutoRunCli(moduleUrl: string, argv1?: string): boolean {
 
 if (shouldAutoRunCli(import.meta.url, process.argv[1])) {
   void program.parseAsync(process.argv);
+} else {
+  // Fallback: if the module appears to be running as a CLI (has argv with commands like 'init', 'index', etc.)
+  // and not being imported as a library, parse the arguments anyway
+  const commands = ['init', 'index', 'query', 'clear', 'status'];
+  const cmd = process.argv[2];
+  if (process.argv.length > 2 && cmd && commands.includes(cmd.toLowerCase())) {
+    void program.parseAsync(process.argv);
+  }
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
