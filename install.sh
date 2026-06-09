@@ -131,56 +131,14 @@ else
   die "$PLUGIN_NAME not found in $GLOBAL_CONFIG/node_modules/"
 fi
 
-# Register plugin in opencode config if not already present
-step "Registering plugin with OpenCode..."
-if [[ -f "$GLOBAL_CONFIG/opencode.jsonc" ]]; then
-  if grep -q "\"$PLUGIN_NAME\"" "$GLOBAL_CONFIG/opencode.jsonc" 2>/dev/null; then
-    info "$PLUGIN_NAME already registered in opencode.jsonc"
-  else
-    _tmp=$(mktemp)
-    node -e "
-      const fs = require('fs');
-      const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      c.plugin = c.plugin || [];
-      if (!c.plugin.includes('$PLUGIN_NAME')) {
-        c.plugin.push('$PLUGIN_NAME');
-      }
-      fs.writeFileSync(process.argv[2], JSON.stringify(c, null, 2) + '\n');
-    " "$GLOBAL_CONFIG/opencode.jsonc" "$_tmp"
-    mv "$_tmp" "$GLOBAL_CONFIG/opencode.jsonc"
-    ok "Added $PLUGIN_NAME to opencode.jsonc"
-  fi
-elif [[ -f "$GLOBAL_CONFIG/opencode.json" ]]; then
-  if grep -q "\"$PLUGIN_NAME\"" "$GLOBAL_CONFIG/opencode.json" 2>/dev/null; then
-    info "$PLUGIN_NAME already registered in opencode.json"
-  else
-    node -e "
-      const fs = require('fs');
-      const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      c.plugin = c.plugin || [];
-      if (!c.plugin.includes('$PLUGIN_NAME')) {
-        c.plugin.push('$PLUGIN_NAME');
-      }
-      fs.writeFileSync(process.argv[1], JSON.stringify(c, null, 2) + '\n');
-    " "$GLOBAL_CONFIG/opencode.json"
-    ok "Added $PLUGIN_NAME to opencode.json"
-  fi
-else
-  cat > "$GLOBAL_CONFIG/opencode.jsonc" << JSONEOF
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "plugin": ["$PLUGIN_NAME"]
-}
-JSONEOF
-  ok "Created opencode.jsonc with $PLUGIN_NAME"
-fi
-
 # Clean up .tgz
 cleanup_tgz
 
-# Note: Plugin is registered in opencode.jsonc above (step "Registering plugin with OpenCode").
-# The `opencode plugin --global` command would download from npm (v1.1.0)
-# and conflict with the locally built version. Rely on the jsonc registration instead.
+# Note: Plugin registration via opencode.jsonc is intentionally SKIPPED.
+# OpenCode resolves plugin entries from npm, which triggers native dependency
+# compilation (canvas) and fails in this environment. The plugin is loaded via
+# the workspace-local .opencode/plugins/rag-plugin.js file (auto-discovered
+# by OpenCode), set up by \`opencode-rag init\` in each workspace.
 
 # Create CLI wrapper (pointing to runtime's node_modules for stability)
 step "Making CLI available on PATH..."

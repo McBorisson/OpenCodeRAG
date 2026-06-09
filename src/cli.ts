@@ -183,6 +183,11 @@ function buildOpencodeConfig(existing: Record<string, unknown> | undefined): Rec
   if (typeof next.$schema !== "string") {
     next.$schema = "https://opencode.ai/config.json";
   }
+  // Plugin is loaded via .opencode/plugins/rag-plugin.js auto-discovery,
+  // not via npm package resolution. Stale "plugin" entries from older
+  // init versions would trigger npm install (which fails due to native
+  // dependencies like canvas) and produce "Plugin export is not a function".
+  delete next.plugin;
   return next;
 }
 

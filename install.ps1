@@ -202,65 +202,14 @@ else {
     die "$PLUGIN_NAME not found in $GLOBAL_CONFIG\node_modules\"
 }
 
-# Register plugin in opencode config
-step "Registering plugin with OpenCode..."
-$jsoncPath = Join-Path $GLOBAL_CONFIG "opencode.jsonc"
-$jsonPath = Join-Path $GLOBAL_CONFIG "opencode.json"
-
-if (Test-Path -LiteralPath $jsoncPath -PathType Leaf) {
-    if (Select-String -LiteralPath $jsoncPath -Pattern '"opencode-rag-plugin"' -Quiet) {
-        info "$PLUGIN_NAME already registered in opencode.jsonc"
-    }
-    else {
-        node -e @'
-            const fs = require("fs");
-            const cfgPath = process.argv[2];
-            const name = process.argv[3];
-            const c = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-            c.plugin = c.plugin || [];
-            if (!c.plugin.includes(name)) {
-                c.plugin.push(name);
-            }
-            fs.writeFileSync(cfgPath, JSON.stringify(c, null, 2) + "\n");
-'@ $jsoncPath $PLUGIN_NAME
-        ok "Added $PLUGIN_NAME to opencode.jsonc"
-    }
-}
-elseif (Test-Path -LiteralPath $jsonPath -PathType Leaf) {
-    if (Select-String -LiteralPath $jsonPath -Pattern '"opencode-rag-plugin"' -Quiet) {
-        info "$PLUGIN_NAME already registered in opencode.json"
-    }
-    else {
-        node -e @'
-            const fs = require("fs");
-            const cfgPath = process.argv[2];
-            const name = process.argv[3];
-            const c = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-            c.plugin = c.plugin || [];
-            if (!c.plugin.includes(name)) {
-                c.plugin.push(name);
-            }
-            fs.writeFileSync(cfgPath, JSON.stringify(c, null, 2) + "\n");
-'@ $jsonPath $PLUGIN_NAME
-        ok "Added $PLUGIN_NAME to opencode.json"
-    }
-}
-else {
-    @"
-{
-  "`$schema": "https://opencode.ai/config.json",
-  "plugin": ["$PLUGIN_NAME"]
-}
-"@ | Set-Content -LiteralPath $jsoncPath -Encoding UTF8
-    ok "Created opencode.jsonc with $PLUGIN_NAME"
-}
-
 # Clean up .tgz
 cleanup_tgz
 
-# Note: Plugin is registered in opencode.jsonc above (step "Registering plugin with OpenCode").
-# The `opencode plugin --global` command would download from npm (v1.1.0)
-# and conflict with the locally built version. Rely on the jsonc registration instead.
+# Note: Plugin registration via opencode.jsonc is intentionally SKIPPED.
+# OpenCode resolves plugin entries from npm, which triggers native dependency
+# compilation (canvas) and fails in this environment. The plugin is loaded via
+# the workspace-local .opencode/plugins/rag-plugin.js file (auto-discovered
+# by OpenCode), set up by `opencode-rag init` in each workspace.
 
 # Create CLI wrapper
 step "Making CLI available on PATH..."
