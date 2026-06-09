@@ -671,6 +671,11 @@ program
     console.log("\nDone. Restart OpenCode if it is running, then run `opencode-rag index` in this workspace.");
   });
 
+/**
+ * Determine whether the CLI should auto-run for the current module.
+ * Resolves the first argv entry so symlinked binaries compare against the
+ * real file path, and returns false if the path cannot be resolved.
+ */
 export function shouldAutoRunCli(moduleUrl: string, argv1?: string): boolean {
   if (!argv1) {
     return false;
