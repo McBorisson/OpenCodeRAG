@@ -38,7 +38,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node -e \"const {spawnSync}=require('node:child_process');const {globSync}=require('node:fs');const testFiles=globSync('src/**/*.test.ts');if(testFiles.length===0){console.log('No test files found under src; skipping npm test.');process.exit(0);}const result=spawnSync(process.execPath,['--import','tsx','--test','--test-force-exit',...testFiles],{stdio:'inherit'});process.exit(typeof result.status==='number'?result.status:1);\"",
     "cli": "tsx src/cli.ts",
-    "release:patch": "npm version patch && git push origin main && git push origin $(git describe --tags --abbrev=0) && gh release create $(git describe --tags --abbrev=0) --title \"Version $(git describe --tags --abbrev=0)\" --notes \"Patch release\""
+    "release:patch": "node ./scripts/release-patch.js"
   },
   "keywords": [
     "opencode",
