@@ -67,11 +67,30 @@ Workspace Files
 
 ## Installation
 
-```bash
-# Install globally
-npm install -g opencode-rag-plugin
+### Global installation (recommended)
 
-# Configure a workspace for OpenCodeRAG
+Clone the repository and run the install script:
+
+**Windows:**
+```powershell
+.\install.ps1
+```
+
+**Linux/macOS:**
+```bash
+./install.sh
+```
+
+This will:
+1. Build the plugin from source (`npm run build`)
+2. Install it into OpenCode's runtime (`~/.opencode/node_modules/`)
+3. Register it in the global OpenCode config (`~/.config/opencode/opencode.jsonc`)
+
+After installation, restart OpenCode and the plugin is ready.
+
+### Per-workspace setup
+
+```bash
 cd your-workspace
 opencode-rag init
 ```
@@ -82,10 +101,12 @@ opencode-rag init
 - `.opencode/.gitignore`
 - `.opencode/opencode.json`
 - `.opencode/package.json`
-- `.opencode/plugins/rag-plugin.js`
+- `.opencode/plugins/rag-plugin.js` (workspace-local plugin fallback)
 - `.opencode/node_modules/` with the workspace-local plugin dependencies
 
 Add `--skip-install` if you only want the files without installing dependencies.
+
+### Dependencies
 
 ### Dependencies
 
@@ -220,24 +241,27 @@ chat.
 After cloning and installing dependencies:
 
 ```bash
-# Option 1: Bootstrap the current workspace
-opencode-rag init
+# Option 1: Install globally via the install script (recommended)
+./install.sh        # Linux/macOS
+.\install.ps1       # Windows
 
-# Option 2: Build and install via npm pack
+# Option 2: Build and pack manually, then register globally
 npm run build
 npm pack
-opencode plugin .\opencode-rag-0.1.0.tgz
+npm install --prefix ~/.opencode/ opencode-rag-plugin-1.2.0.tgz
+npm install --prefix ~/.config/opencode/ opencode-rag-plugin-1.2.0.tgz
+# Add "opencode-rag-plugin" to the plugin array in ~/.config/opencode/opencode.jsonc
 
-# Option 3: Install from npm
-opencode plugin opencode-rag-plugin
+# Option 3: Bootstrap workspace only (uses npm version)
+opencode-rag init
 ```
 
 The plugin auto-detects configuration from `opencode-rag.json` or
-`.opencode/rag.json` in the project root.
+`.opencode/opencode-rag.json` or `.opencode/rag.json` in the project root.
 
-`opencode-rag init` creates a project-local plugin file that OpenCode auto-loads from
-`.opencode/plugins/` at startup and no `plugin` entry is required in
-`.opencode/opencode.json`.
+`opencode-rag init` creates a workspace-local plugin file at `.opencode/plugins/rag-plugin.js`
+that re-exports from `node_modules/`, serving as a fallback when global loading fails.
+No `plugin` entry is required in `.opencode/opencode.json`.
 
 Restart OpenCode after changing plugin files or plugin configuration.
 
