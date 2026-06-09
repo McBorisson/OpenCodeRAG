@@ -67,19 +67,26 @@ function cleanup_tgz {
 function remove_from_npm {
     param([string]$dir)
     $pkg = Join-Path $dir "package.json"
-    $pluginDir = Join-Path $dir "node_modules" $PLUGIN_NAME
+    $pluginDir = Join-Path (Join-Path $dir "node_modules") $PLUGIN_NAME
+    
+    # Remove plugin directory
     Remove-Item -Path $pluginDir -Recurse -Force -ErrorAction SilentlyContinue
+    
+    # Update package.json if it exists
     if (Test-Path -LiteralPath $pkg -PathType Leaf) {
-        node -e @'
-            const fs = require("fs");
-            const p = process.argv[2];
-            const name = process.argv[3];
-            const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-            if (pkg.dependencies && pkg.dependencies[name]) {
-                delete pkg.dependencies[name];
+        try {
+            $content = Get-Content -LiteralPath $pkg -Raw | ConvertFrom-Json
+            if ($content.dependencies -and $content.dependencies.$PLUGIN_NAME) {
+                $content.dependencies.PSObject.Properties.Remove($PLUGIN_NAME)
             }
-            fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + "\n");
-'@ $pkg $PLUGIN_NAME
+            $content | ConvertTo-Json | Set-Content -LiteralPath $pkg -NoNewline
+            Add-Content -LiteralPath $pkg -Value "`n"
+        }
+        catch {
+            # Silently skip if package.json is malformed
+        }
+        
+        # Try npm prune
         Push-Location $dir
         & cmd /c "npm prune --prefix `"$dir`" --silent 2>nul"
         Pop-Location
@@ -90,18 +97,22 @@ function remove_from_config {
     foreach ($cfg in @("opencode.jsonc", "opencode.json")) {
         $cfgpath = Join-Path $GLOBAL_CONFIG $cfg
         if (-not (Test-Path -LiteralPath $cfgpath -PathType Leaf)) { continue }
-        node -e @'
-            const fs = require("fs");
-            const cfgPath = process.argv[2];
-            const name = process.argv[3];
-            const c = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-            if (c.plugin) {
-                c.plugin = c.plugin.filter(p => p !== name);
-                if (c.plugin.length === 0) delete c.plugin;
+        
+        try {
+            $content = Get-Content -LiteralPath $cfgpath -Raw | ConvertFrom-Json
+            if ($content.plugin) {
+                $content.plugin = @($content.plugin | Where-Object { $_ -ne $PLUGIN_NAME })
+                if ($content.plugin.Count -eq 0) {
+                    $content.PSObject.Properties.Remove('plugin')
+                }
             }
-            fs.writeFileSync(cfgPath, JSON.stringify(c, null, 2) + "\n");
-'@ $cfgpath $PLUGIN_NAME
-        info "Removed $PLUGIN_NAME from $cfgpath"
+            $content | ConvertTo-Json | Set-Content -LiteralPath $cfgpath -NoNewline
+            Add-Content -LiteralPath $cfgpath -Value "`n"
+            info "Removed $PLUGIN_NAME from $cfgpath"
+        }
+        catch {
+            # Silently skip if config is malformed
+        }
     }
 }
 
@@ -118,15 +129,36 @@ if (-not (Get-Command opencode -ErrorAction SilentlyContinue)) {
 # --- uninstall ---------------------------------------------------------------
 
 if ($args[0] -eq "uninstall") {
-    step "Uninstalling $PLUGIN_NAME..."
+    step "Uninstalling $PLUGIN_NAME from all locations..."
+    
+    # Remove CLI wrapper
+    info "Removing CLI wrapper..."
     Remove-Item -Path "$CLI_BIN_DIR\opencode-rag.ps1" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$CLI_BIN_DIR\opencode-rag" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$CLI_BIN_DIR\opencode-rag.sh" -Force -ErrorAction SilentlyContinue
+    
+    # Remove from global config node_modules
+    info "Removing from global config ($GLOBAL_CONFIG)..."
     remove_from_npm $GLOBAL_CONFIG
+    
+    # Remove from OpenCode runtime node_modules
+    info "Removing from OpenCode runtime ($RUNTIME_DIR)..."
     remove_from_npm $RUNTIME_DIR
+    
+    # Clean up .tgz files
+    info "Removing .tgz package files..."
     cleanup_tgz
+    
+    # Remove from OpenCode config
+    info "Updating OpenCode configuration..."
     remove_from_config
+    
+    # Remove workspace-local legacy files
+    info "Removing workspace-local files..."
     Remove-Item -Path "$REPO_ROOT\.opencode\plugins\rag-plugin.js" -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$REPO_ROOT\.opencode\plugins\package.json" -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$REPO_ROOT\.opencode\plugins" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$REPO_ROOT\.opencode\plugins" -Recurse -Force -ErrorAction SilentlyContinue
+    
     step "Uninstalled. Restart OpenCode if it is running."
     exit 0
 }

@@ -71,21 +71,36 @@ command -v opencode >/dev/null 2>&1 || die "opencode is required but was not fou
 # --- uninstall ---------------------------------------------------------------
 
 if [[ "${1:-}" = "uninstall" ]]; then
-  step "Uninstalling $PLUGIN_NAME..."
-
-  rm -f "$CLI_BIN_DIR/opencode-rag"
-
+  step "Uninstalling $PLUGIN_NAME from all locations..."
+  
+  # Remove CLI wrapper
+  info "Removing CLI wrapper..."
+  rm -f "$CLI_BIN_DIR/opencode-rag" \
+        "$CLI_BIN_DIR/opencode-rag.ps1" \
+        "$CLI_BIN_DIR/opencode-rag.sh"
+  
+  # Remove from global config node_modules
+  info "Removing from global config ($GLOBAL_CONFIG)..."
   remove_from_npm "$GLOBAL_CONFIG"
+  
+  # Remove from OpenCode runtime node_modules
+  info "Removing from OpenCode runtime ($RUNTIME_DIR)..."
   remove_from_npm "$RUNTIME_DIR"
+  
+  # Clean up .tgz files
+  info "Removing .tgz package files..."
   cleanup_tgz
-
+  
+  # Remove from OpenCode config
+  info "Updating OpenCode configuration..."
   remove_from_config
-
-  # Remove old workspace-local wrappers (legacy)
+  
+  # Remove workspace-local legacy files
+  info "Removing workspace-local files..."
   rm -f "$REPO_ROOT/.opencode/plugins/rag-plugin.js" \
         "$REPO_ROOT/.opencode/plugins/package.json"
-  rmdir "$REPO_ROOT/.opencode/plugins" 2>/dev/null || true
-
+  rm -rf "$REPO_ROOT/.opencode/plugins" 2>/dev/null || true
+  
   step "Uninstalled. Restart OpenCode if it is running."
   exit 0
 fi
