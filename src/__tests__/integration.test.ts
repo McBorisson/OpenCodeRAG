@@ -2,8 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
+function isOpencodeAvailable(): boolean {
+  const result = spawnSync("which", ["opencode"], { encoding: "utf-8" });
+  return result.status === 0 && result.stdout.trim().length > 0;
+}
+
 describe("opencode run integration", () => {
-  it("starts correctly with the rag plugin and returns relevant files", () => {
+  it("starts correctly with the rag plugin and returns relevant files", { skip: !isOpencodeAvailable() ? "opencode binary not found; skipping integration test" : false }, () => {
     const result = spawnSync(
       "opencode",
       ["run", "list relevant files", "--log-level", "ERROR", "--print-logs"],
