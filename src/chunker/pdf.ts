@@ -1,18 +1,39 @@
 import type { Chunker, Chunk } from "../core/interfaces.js";
 import { uuid } from "./uuid.js";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
 
 const MAX_CHUNK_CHARS = 4000;
 const MIN_GROUP_CHARS = 300;
 
 const PARAGRAPH_SPLIT = /\n\s*\n/;
 
+function getStandardFontsUrl(): string {
+  const require = createRequire(import.meta.url);
+  const pkgJson = require.resolve("pdfjs-dist/package.json");
+  const fontsDir = path.join(path.dirname(pkgJson), "standard_fonts");
+  const url = pathToFileURL(fontsDir).href;
+  return url.endsWith("/") ? url : url + "/";
+}
+
 async function createPdfDocument(buffer: Buffer) {
-  const { DOMMatrix } = await import("canvas");
-  globalThis.DOMMatrix ??= DOMMatrix as unknown as typeof globalThis.DOMMatrix;
-  globalThis.DOMMatrixReadOnly ??= DOMMatrix as unknown as typeof globalThis.DOMMatrixReadOnly;
+  try {
+    const { DOMMatrix } = await import("canvas");
+    globalThis.DOMMatrix ??= DOMMatrix as unknown as typeof globalThis.DOMMatrix;
+    globalThis.DOMMatrixReadOnly ??= DOMMatrix as unknown as typeof globalThis.DOMMatrixReadOnly;
+  } catch {
+    const { default: CSSMatrix } = await import("@thednp/dommatrix");
+    globalThis.DOMMatrix ??= CSSMatrix as unknown as typeof globalThis.DOMMatrix;
+    globalThis.DOMMatrixReadOnly ??= CSSMatrix as unknown as typeof globalThis.DOMMatrixReadOnly;
+  }
 
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = getDocument({ data: new Uint8Array(buffer) });
+  const loadingTask = getDocument({
+    data: new Uint8Array(buffer),
+    standardFontDataUrl: getStandardFontsUrl(),
+    verbosity: 0,
+  });
   return loadingTask.promise;
 }
 
