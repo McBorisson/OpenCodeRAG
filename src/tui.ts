@@ -33,11 +33,14 @@ function box(props: Record<string, unknown>, children: Child[] = []): JSX.Elemen
   return element("box", props, children);
 }
 
-function renderSidebar(theme: {
-  accent: unknown;
-  text: unknown;
-  textMuted: unknown;
-}): JSX.Element {
+function renderSidebar(
+  theme: {
+    accent: unknown;
+    text: unknown;
+    textMuted: unknown;
+  },
+  version: string,
+): JSX.Element {
   return box(
     {
       width: "100%",
@@ -61,23 +64,22 @@ function renderSidebar(theme: {
           box({ paddingLeft: 1, paddingRight: 1, backgroundColor: theme.accent }, [
             text({ fg: "#000000" }, ["OpenCodeRAG"]),
           ]),
+          text({ fg: theme.textMuted }, [`v${version}`]),
         ],
       ),
-      box({ width: "100%", marginTop: 1 }, [
-        text({ fg: theme.text }, ["Hello World"]),
-      ]),
     ],
   );
 }
 
 const plugin: TuiPluginModule & { id: string } = {
   id: `${PLUGIN_NAME}:tui`,
-  tui: async (api) => {
+  tui: async (api, _options, meta) => {
+    const version = meta.version ?? "dev";
     api.slots.register({
       order: 900,
       slots: {
         sidebar_content() {
-          return renderSidebar(api.theme.current);
+          return renderSidebar(api.theme.current, version);
         },
       },
     });

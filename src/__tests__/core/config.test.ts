@@ -163,8 +163,8 @@ describe("DEFAULT_CONFIG", () => {
     assert.equal(DEFAULT_CONFIG.retrieval.topK, 10);
   });
 
-  it("has minScore of 0", () => {
-    assert.equal(DEFAULT_CONFIG.retrieval.minScore, 0);
+  it("has minScore of 0.5", () => {
+    assert.equal(DEFAULT_CONFIG.retrieval.minScore, 0.5);
   });
 
   it("has info as default logging level", () => {

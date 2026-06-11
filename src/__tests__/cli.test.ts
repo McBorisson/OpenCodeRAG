@@ -39,19 +39,21 @@ describe("opencode-rag init", () => {
     const opencodeConfigPath = join(opencodeDir, "opencode.json");
     const opencodePackagePath = join(opencodeDir, "package.json");
     const pluginEntryPath = join(opencodeDir, "plugins", "rag-plugin.js");
+    const tuiConfigPath = join(opencodeDir, "tui.json");
 
     assert.ok(existsSync(opencodeDir), ".opencode/ should exist");
     assert.ok(existsSync(gitignorePath), ".opencode/.gitignore should exist");
     assert.ok(existsSync(opencodeConfigPath), ".opencode/opencode.json should exist");
     assert.ok(existsSync(opencodePackagePath), ".opencode/package.json should exist");
     assert.ok(existsSync(pluginEntryPath), ".opencode/plugins/rag-plugin.js should exist");
+    assert.ok(existsSync(tuiConfigPath), ".opencode/tui.json should exist");
     assert.ok(existsSync(configPath), "opencode-rag.json should exist");
 
     // Check opencode-rag.json is valid JSON
     const configContent = readFileSync(configPath, "utf-8");
     const parsed = JSON.parse(configContent);
     assert.equal(parsed.embedding.provider, "ollama");
-    assert.equal(parsed.embedding.baseUrl, "http://localhost:11434/api");
+    assert.equal(parsed.embedding.baseUrl, "http://127.0.0.1:11434/api");
     assert.equal(parsed.vectorStore.path, "./.opencode/rag_db");
 
     // Check .gitignore content
@@ -72,6 +74,9 @@ describe("opencode-rag init", () => {
 
     const pluginEntry = readFileSync(pluginEntryPath, "utf-8");
     assert.match(pluginEntry, /node_modules\/opencode-rag-plugin\/dist\/plugin-entry\.js/);
+
+    const tuiConfig = JSON.parse(readFileSync(tuiConfigPath, "utf-8"));
+    assert.deepEqual(tuiConfig.plugin, ["./plugins/rag-tui.js"]);
   });
 
   it("does not overwrite existing files without --force", async () => {

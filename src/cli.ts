@@ -616,7 +616,6 @@ program
 function generateDefaultConfigJson(): string {
   return JSON.stringify(
     {
-      $schema: "https://raw.githubusercontent.com/MrDoe/OpenCodeRAG/main/opencode-rag.schema.json",
       embedding: {
         provider: DEFAULT_CONFIG.embedding.provider,
         baseUrl: DEFAULT_CONFIG.embedding.baseUrl,
@@ -635,6 +634,10 @@ function generateDefaultConfigJson(): string {
       retrieval: {
         topK: DEFAULT_CONFIG.retrieval.topK,
         minScore: DEFAULT_CONFIG.retrieval.minScore,
+        hybridSearch: {
+          enabled: DEFAULT_CONFIG.retrieval.hybridSearch!.enabled,
+          keywordWeight: DEFAULT_CONFIG.retrieval.hybridSearch!.keywordWeight,
+        },
       },
       openCode: {
         enabled: DEFAULT_CONFIG.openCode.enabled,
@@ -644,6 +647,12 @@ function generateDefaultConfigJson(): string {
           enabled: DEFAULT_CONFIG.openCode.autoIndex!.enabled,
           debounceMs: DEFAULT_CONFIG.openCode.autoIndex!.debounceMs,
           intervalMs: DEFAULT_CONFIG.openCode.autoIndex!.intervalMs,
+        },
+        autoInject: {
+          enabled: DEFAULT_CONFIG.openCode.autoInject!.enabled,
+          minScore: DEFAULT_CONFIG.openCode.autoInject!.minScore,
+          maxChunks: DEFAULT_CONFIG.openCode.autoInject!.maxChunks,
+          maxTokens: DEFAULT_CONFIG.openCode.autoInject!.maxTokens,
         },
       },
       logging: {
@@ -671,6 +680,7 @@ program
     const pluginsDir = path.join(opencodeDir, "plugins");
     const pluginEntryPath = path.join(pluginsDir, "rag-plugin.js");
     const tuiPluginEntryPath = path.join(pluginsDir, "rag-tui.js");
+    const tuiConfigPath = path.join(opencodeDir, "tui.json");
     const opencodePackagePath = path.join(opencodeDir, "package.json");
 
     console.log("Initializing OpenCodeRAG in workspace...\n");
@@ -734,6 +744,18 @@ program
       console.log("  Updated:  .opencode/plugins/rag-tui.js");
     } else {
       console.log("  Exists:   .opencode/plugins/rag-tui.js");
+    }
+
+    const tuiConfigExists = existsSync(tuiConfigPath);
+    const nextTuiConfig = { plugin: ["./plugins/rag-tui.js"] };
+    if (!tuiConfigExists || options.force) {
+      writeJsonFile(tuiConfigPath, nextTuiConfig);
+      console.log(`  ${tuiConfigExists ? "Updated" : "Created"}: .opencode/tui.json`);
+    } else if (JSON.stringify(readJsonObject(tuiConfigPath)) !== JSON.stringify(nextTuiConfig)) {
+      writeJsonFile(tuiConfigPath, nextTuiConfig);
+      console.log("  Updated:  .opencode/tui.json");
+    } else {
+      console.log("  Exists:   .opencode/tui.json");
     }
 
     const workspacePackageExists = existsSync(opencodePackagePath);

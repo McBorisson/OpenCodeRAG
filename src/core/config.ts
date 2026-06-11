@@ -78,8 +78,8 @@ export interface LoggingConfig {
 export const DEFAULT_CONFIG: RagConfig = {
   embedding: {
     provider: "ollama",
-    baseUrl: "http://localhost:11434/api",
-    model: "embeddinggemma",
+    baseUrl: "http://127.0.0.1:11434/api",
+    model: "embeddinggemma:latest",
     timeoutMs: 30000,
   },
   indexing: {
@@ -135,14 +135,14 @@ export const DEFAULT_CONFIG: RagConfig = {
       ".venv",
     ],
     chunkOverlap: 0,
-    minFileSizeBytes: 10,
+    minFileSizeBytes: 0,
   },
   vectorStore: {
     path: "./.opencode/rag_db",
   },
   retrieval: {
     topK: 10,
-    minScore: 0,
+    minScore: 0.5,
     hybridSearch: {
       enabled: true,
       keywordWeight: 0.4,
@@ -150,11 +150,11 @@ export const DEFAULT_CONFIG: RagConfig = {
   },
   openCode: {
     enabled: true,
-    maxContextChunks: 5,
-    readOverride: false,
+    maxContextChunks: 10,
+    readOverride: true,
     autoIndex: {
       enabled: true,
-      debounceMs: 5000,
+      debounceMs: 2000,
       intervalMs: 300000,
     },
     autoInject: {
