@@ -1,7 +1,7 @@
 # OpenCodeRAG
 
 OpenCodeRAG is a RAG (Retrieval-Augmented Generation) plugin for semantic code search powered by locally-hosted embedding models. 
-It features a seamless integration with [OpenCode](https://opencode.ai) and offers a CLI interface as backend for testing purposes.
+It features a seamless integration with [OpenCode](https://opencode.ai) and offers a CLI interface for external usage.
 
 [![npm version](https://img.shields.io/npm/v/opencode-rag-plugin.svg)](https://www.npmjs.com/package/opencode-rag-plugin)
 
