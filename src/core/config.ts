@@ -38,6 +38,8 @@ export interface RagConfig {
     model: string;
     timeoutMs?: number;
     proxy?: ProxyConfig;
+    documentPrefix?: string;
+    queryPrefix?: string;
   };
   indexing: {
     includeExtensions: string[];

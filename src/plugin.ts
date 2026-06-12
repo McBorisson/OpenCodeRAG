@@ -262,10 +262,11 @@ async function retrieveContext(
   retrieveFn: typeof retrieve = retrieve,
   minScore = 0,
   keywordIndex?: KeywordIndex,
-  keywordWeight?: number
+  keywordWeight?: number,
+  queryPrefix?: string
 ): Promise<SearchResult[]> {
   if (query.trim().length === 0) return [];
-  return retrieveFn(query, embedder, store, { topK, minScore, keywordIndex, keywordWeight });
+  return retrieveFn(query, embedder, store, { topK, minScore, keywordIndex, keywordWeight, queryPrefix });
 }
 
 async function loadRetrievedResults(
@@ -276,13 +277,14 @@ async function loadRetrievedResults(
   retrieveFn: typeof retrieve = retrieve,
   topK = cfg.retrieval.topK,
   extraQuery?: string,
-  keywordIndex?: KeywordIndex
+  keywordIndex?: KeywordIndex,
+  queryPrefix?: string
 ): Promise<SearchResult[]> {
   const minScore = cfg.retrieval.minScore;
   const kw = cfg.retrieval.hybridSearch?.keywordWeight;
-  const primaryResults = await retrieveContext(query, embedder, store, topK, retrieveFn, minScore, keywordIndex, kw);
+  const primaryResults = await retrieveContext(query, embedder, store, topK, retrieveFn, minScore, keywordIndex, kw, queryPrefix);
   const extraResults = extraQuery
-    ? await retrieveContext(extraQuery, embedder, store, topK, retrieveFn, minScore, keywordIndex, kw)
+    ? await retrieveContext(extraQuery, embedder, store, topK, retrieveFn, minScore, keywordIndex, kw, queryPrefix)
     : [];
 
   return dedupeResults([...primaryResults, ...extraResults])
@@ -441,7 +443,7 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
           languageHints: args.languageHints,
         });
         const topK = args.topK ?? options.cfg.retrieval.topK;
-        const results = await loadRetrievedResults(query, embedder, store, options.cfg, dependencies.retrieve, topK, undefined, keywordIndex);
+        const results = await loadRetrievedResults(query, embedder, store, options.cfg, dependencies.retrieve, topK, undefined, keywordIndex, options.cfg.embedding.queryPrefix);
 
         if (results.length === 0) {
           appendVerboseLog(options.logFilePath, CONTEXT_TOOL_NAME, "retrieval completed with no matching chunks", {
@@ -569,6 +571,7 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
           minScore: options.cfg.retrieval.minScore,
           keywordIndex,
           keywordWeight: hybridCfg?.keywordWeight,
+          queryPrefix: options.cfg.embedding.queryPrefix,
         });
 
         if (results.length === 0) return;

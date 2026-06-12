@@ -93,7 +93,7 @@ export function createRagReadTool(
                 rawResults = cached.rawResults;
               } else {
                 const retrievalQuery = buildSessionQuery(messageText, resolvedPath, normalized);
-                rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK, keywordIndex });
+                rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK, keywordIndex, queryPrefix: config.embedding.queryPrefix });
                 sessionRetrievalCache.set(sessionID, { messageText, rawResults });
               }
             } else {
@@ -103,7 +103,7 @@ export function createRagReadTool(
                 startLine: normalized.startLine,
                 endLine: normalized.endLine,
               });
-              rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK, keywordIndex });
+              rawResults = await retrieve(retrievalQuery, embedder, store, { topK: retrievalTopK, keywordIndex, queryPrefix: config.embedding.queryPrefix });
             }
 
             // Collect related files from raw results (before filtering)

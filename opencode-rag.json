@@ -2,8 +2,8 @@
   "embedding": {
     "provider": "ollama",
     "baseUrl": "http://127.0.0.1:11434/api",
-    "model": "embeddinggemma:latest",
-    "timeoutMs": 30000
+    "model": "manutic/nomic-embed-code",
+    "timeoutMs": 60000
   },
   "indexing": {
     "includeExtensions": [
@@ -64,8 +64,8 @@
     "path": "./.opencode/rag_db"
   },
   "retrieval": {
-    "topK": 10,
-    "minScore": 0.6,
+    "topK": 20,
+    "minScore": 0.1,
     "hybridSearch": {
       "enabled": true,
       "keywordWeight": 0.4
@@ -73,7 +73,7 @@
   },
   "openCode": {
     "enabled": true,
-    "maxContextChunks": 10,
+    "maxContextChunks": 20,
     "readOverride": true,
     "autoIndex": {
       "enabled": true,
@@ -83,7 +83,7 @@
     "autoInject": {
       "enabled": true,
       "minScore": 0.75,
-      "maxChunks": 3,
+      "maxChunks": 10,
       "maxTokens": 2000
     }
   },

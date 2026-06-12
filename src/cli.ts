@@ -501,7 +501,7 @@ program
       const minScore = config.retrieval.minScore;
       const keywordIndex = await loadCliKeywordIndex(path.resolve(cwd, config.vectorStore.path), logFilePath);
       const hybridCfg = config.retrieval.hybridSearch;
-      const results = await retrieve(query, embedder, store, { topK, minScore, keywordIndex, keywordWeight: hybridCfg?.keywordWeight });
+      const results = await retrieve(query, embedder, store, { topK, minScore, keywordIndex, keywordWeight: hybridCfg?.keywordWeight, queryPrefix: config.embedding.queryPrefix });
 
       if (results.length === 0) {
         logCliInfo(logFilePath, "query", "No results found.");

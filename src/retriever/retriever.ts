@@ -5,6 +5,7 @@ export interface RetrieveOptions {
   minScore?: number;
   keywordIndex?: KeywordIndex;
   keywordWeight?: number;
+  queryPrefix?: string;
 }
 
 export async function retrieve(
@@ -16,7 +17,8 @@ export async function retrieve(
   const topK = options.topK ?? 10;
   const minScore = options.minScore ?? 0;
 
-  const embeddings = await embedder.embed([query]);
+  const prefixedQuery = (options.queryPrefix ?? "") + query;
+  const embeddings = await embedder.embed([prefixedQuery]);
   const embedding = embeddings[0];
   if (!embedding || embedding.length === 0) {
     return [];

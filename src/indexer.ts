@@ -278,9 +278,10 @@ export async function runIndexPass(options: RunIndexPassOptions): Promise<IndexR
 
     options.keywordIndex?.addChunks(chunks);
 
+    const docPrefix = options.config.embedding.documentPrefix ?? "";
     const embeddings = await embedBatch(
       options.embedder,
-      chunks.map((chunk) => chunk.content)
+      chunks.map((chunk) => docPrefix + chunk.content)
     );
 
     for (let i = 0; i < chunks.length; i++) {
