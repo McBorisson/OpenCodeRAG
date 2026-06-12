@@ -91,8 +91,8 @@ describe("watcher", () => {
       logFilePath,
     });
 
-    // Let the initial pass start
-    await delay(100);
+    // Let the initial pass start (generous delay under test load)
+    await delay(500);
 
     // Closing it should shut down timers and watchers
     await indexer.close();

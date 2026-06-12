@@ -3,6 +3,7 @@ import path from "node:path";
 import { appendDebugLog } from "./core/fileLogger.js";
 import type { RagConfig } from "./core/config.js";
 import type { DescriptionProvider, EmbeddingProvider, KeywordIndex, VectorStore } from "./core/interfaces.js";
+import { isCorruptionError } from "./vectorstore/lancedb.js";
 import {
   createWatchPassScheduler,
   createWatchIgnore,
@@ -64,11 +65,41 @@ export function createBackgroundIndexer(options: CreateBackgroundIndexerOptions)
         },
       });
     } catch (err) {
-      appendDebugLog(logFilePath, {
-        scope: "autoIndex",
-        message: "Watch reindex pass failed",
-        error: err,
-      });
+      if (isCorruptionError(err)) {
+        appendDebugLog(logFilePath, {
+          scope: "autoIndex",
+          message: "Corruption detected; clearing store and rebuilding",
+          error: err,
+        });
+        try {
+          await store.clear();
+          keywordIndex?.clear();
+          await runIndexPass({
+            cwd,
+            storePath,
+            config,
+            store,
+            embedder,
+            keywordIndex,
+            descriptionProvider,
+            logger: {
+              warn: (message) => appendDebugLog(logFilePath, { scope: "autoIndex", message }),
+            },
+          });
+        } catch (retryErr) {
+          appendDebugLog(logFilePath, {
+            scope: "autoIndex",
+            message: "Rebuild after corruption also failed",
+            error: retryErr,
+          });
+        }
+      } else {
+        appendDebugLog(logFilePath, {
+          scope: "autoIndex",
+          message: "Watch reindex pass failed",
+          error: err,
+        });
+      }
     }
   };
 

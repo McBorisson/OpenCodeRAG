@@ -8,6 +8,17 @@ const VECTOR_COLUMN = "embedding";
 
 const QUERY_COLUMNS = ["id", "content", "description", "filePath", "startLine", "endLine", "language"];
 
+export function isCorruptionError(err: unknown): boolean {
+  if (err instanceof Error) {
+    return (
+      err.message.includes("Not found") &&
+      err.message.includes(".lance") &&
+      err.message.includes("lance error")
+    );
+  }
+  return false;
+}
+
 interface ChunkRow {
   id: string;
   content: string;
@@ -71,7 +82,18 @@ export class LanceDBStore implements VectorStore {
 
   async addChunks(chunks: Chunk[]): Promise<void> {
     if (chunks.length === 0) return;
+    try {
+      await this.addChunksInternal(chunks);
+    } catch (err) {
+      if (isCorruptionError(err) && await this.tryRepair()) {
+        await this.addChunksInternal(chunks);
+        return;
+      }
+      throw err;
+    }
+  }
 
+  private async addChunksInternal(chunks: Chunk[]): Promise<void> {
     const table = await this.getTable();
     const rows: ChunkRow[] = chunks
       .filter((c) => c.embedding && c.embedding.length > 0)
@@ -223,6 +245,18 @@ export class LanceDBStore implements VectorStore {
   }
 
   async deleteByFilePath(filePath: string): Promise<void> {
+    try {
+      await this.deleteByFilePathInternal(filePath);
+    } catch (err) {
+      if (isCorruptionError(err) && await this.tryRepair()) {
+        await this.deleteByFilePathInternal(filePath);
+        return;
+      }
+      throw err;
+    }
+  }
+
+  private async deleteByFilePathInternal(filePath: string): Promise<void> {
     const db = await this.getDb();
     const tableNames = await db.tableNames();
     if (!tableNames.includes(TABLE_NAME)) return;
@@ -233,14 +267,7 @@ export class LanceDBStore implements VectorStore {
   }
 
   private isCorruptionError(err: unknown): boolean {
-    if (err instanceof Error) {
-      return (
-        err.message.includes("Not found") &&
-        err.message.includes(".lance") &&
-        err.message.includes("lance error")
-      );
-    }
-    return false;
+    return isCorruptionError(err);
   }
 
   private async tryRepair(): Promise<boolean> {
