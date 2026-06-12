@@ -8,8 +8,11 @@ export interface ManifestEntry {
   indexedAt: number;
 }
 
+export const SCHEMA_VERSION = 1;
+
 export interface FileManifest {
   lastIndexedAt?: number;
+  schemaVersion?: number;
   files: Record<string, ManifestEntry>;
 }
 
@@ -22,7 +25,7 @@ export interface LoadedManifest {
 }
 
 export function createEmptyManifest(): FileManifest {
-  return { files: {} };
+  return { files: {}, schemaVersion: SCHEMA_VERSION };
 }
 
 export function manifestPathFor(dbPath: string): string {
@@ -50,10 +53,11 @@ export async function loadManifest(dbPath: string): Promise<LoadedManifest> {
     return {
       manifest: {
         lastIndexedAt: typeof parsed.lastIndexedAt === "number" ? parsed.lastIndexedAt : undefined,
+        schemaVersion: parsed.schemaVersion,
         files: parsed.files as Record<string, ManifestEntry>,
       },
       path: filePath,
-      status: "ok",
+      status: parsed.schemaVersion === SCHEMA_VERSION ? "ok" : "corrupt",
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -67,6 +71,8 @@ export async function loadManifest(dbPath: string): Promise<LoadedManifest> {
 export async function saveManifest(dbPath: string, manifest: FileManifest): Promise<void> {
   const filePath = manifestPathFor(dbPath);
   const tempPath = `${filePath}.tmp`;
+
+  manifest.schemaVersion = SCHEMA_VERSION;
 
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(tempPath, JSON.stringify(manifest, null, 2), "utf-8");

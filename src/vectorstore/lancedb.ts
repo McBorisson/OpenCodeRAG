@@ -57,28 +57,42 @@ export class LanceDBStore implements VectorStore {
 
     if (tableNames.includes(TABLE_NAME)) {
       this.table = await db.openTable(TABLE_NAME);
-    } else {
-      const seedRow: ChunkRow = {
-        id: "__seed__",
-        content: "",
-        description: "",
-        embedding: new Array(this.vectorDimension).fill(0),
-        filePath: "",
-        startLine: 0,
-        endLine: 0,
-        language: "",
-      };
-
-      this.table = await db.createTable({
-        name: TABLE_NAME,
-        data: [seedRow] as unknown as Record<string, unknown>[],
-        mode: "overwrite",
-      });
-
-      await this.table.delete('id = "__seed__"');
+      if (await this.tableHasDescriptionColumn()) {
+        return this.table;
+      }
+      await db.dropTable(TABLE_NAME).catch(() => {});
+      this.table = null;
     }
 
+    const seedRow: ChunkRow = {
+      id: "__seed__",
+      content: "",
+      description: "",
+      embedding: new Array(this.vectorDimension).fill(0),
+      filePath: "",
+      startLine: 0,
+      endLine: 0,
+      language: "",
+    };
+
+    this.table = await db.createTable({
+      name: TABLE_NAME,
+      data: [seedRow] as unknown as Record<string, unknown>[],
+      mode: "overwrite",
+    });
+
+    await this.table.delete('id = "__seed__"');
+
     return this.table;
+  }
+
+  private async tableHasDescriptionColumn(): Promise<boolean> {
+    try {
+      const schema = await this.table!.schema;
+      return schema.fields.some((f: { name: string }) => f.name === "description");
+    } catch {
+      return false;
+    }
   }
 
   async addChunks(chunks: Chunk[]): Promise<void> {
@@ -234,6 +248,7 @@ export class LanceDBStore implements VectorStore {
   }
 
   async clear(): Promise<void> {
+    this.table = null;
     try {
       const db = await this.getDb();
       const tableNames = await db.tableNames();
@@ -241,8 +256,11 @@ export class LanceDBStore implements VectorStore {
         await db.dropTable(TABLE_NAME);
       }
     } catch {
+      this.db = null;
+      try {
+        await fs.rm(this.dbPath, { recursive: true, force: true });
+      } catch {}
     }
-    this.table = null;
   }
 
   async dropDatabase(): Promise<void> {
@@ -288,7 +306,13 @@ export class LanceDBStore implements VectorStore {
       const tableNames = await db.tableNames();
       if (!tableNames.includes(TABLE_NAME)) return false;
 
-      const table = await db.openTable(TABLE_NAME);
+      let table: Table;
+      try {
+        table = await db.openTable(TABLE_NAME);
+      } catch {
+        await this.dropDatabase();
+        return true;
+      }
 
       let versions: Version[];
       try {

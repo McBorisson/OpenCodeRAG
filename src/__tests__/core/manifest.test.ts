@@ -18,7 +18,7 @@ async function makeTempDir(name: string): Promise<string> {
 
 describe("manifest", () => {
   it("creates an empty manifest", () => {
-    assert.deepStrictEqual(createEmptyManifest(), { files: {} });
+    assert.deepStrictEqual(createEmptyManifest(), { files: {}, schemaVersion: 1 });
   });
 
   it("normalizes file paths to absolute forward-slash paths", () => {
@@ -36,7 +36,7 @@ describe("manifest", () => {
     const dir = await makeTempDir("manifest-missing");
     const result = await loadManifest(dir);
     assert.equal(result.status, "missing");
-    assert.deepStrictEqual(result.manifest, { files: {} });
+    assert.deepStrictEqual(result.manifest, { files: {}, schemaVersion: 1 });
     assert.equal(result.path, manifestPathFor(dir));
   });
 
@@ -67,6 +67,6 @@ describe("manifest", () => {
 
     const result = await loadManifest(dir);
     assert.equal(result.status, "corrupt");
-    assert.deepStrictEqual(result.manifest, { files: {} });
+    assert.deepStrictEqual(result.manifest, { files: {}, schemaVersion: 1 });
   });
 });
