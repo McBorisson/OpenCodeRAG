@@ -1,10 +1,12 @@
 # OpenCodeRAG
 
-OpenCodeRAG is a **local-first RAG plugin** for semantic code search. It ingests your codebase into a vector index and retrieves relevant code chunks on natural language queries — saving tokens by replacing full-file reads with targeted chunk retrieval. Integrates seamlessly with [OpenCode](https://opencode.ai) and works standalone via CLI.
+OpenCodeRAG is a **local-first RAG plugin** for semantic code search. It converts your codebase into vector indices and retrieves relevant code chunks on natural language queries. The primary aim is to save tokens by replacing full-file reads with targeted chunk retrieval and to speed-up tool calls for large codebases. Integrates seamlessly with [OpenCode](https://opencode.ai) and works standalone via CLI. 
+
+You don't need a dedicated GPU to run embedding LLMs, smaller models can still run performant on modern CPUs.
 
 [![npm version](https://img.shields.io/npm/v/opencode-rag-plugin.svg)](https://www.npmjs.com/package/opencode-rag-plugin)
 
-> ⚠️ **Note:** Don't confuse this with `opencode-rag` (a discontinued package by a different author). Use **`opencode-rag-plugin`**.
+> ⚠️ **Note:** Don't confuse this with the npm package `opencode-rag` (a discontinued project by a different author).
 
 ## Quick Start
 
@@ -27,7 +29,7 @@ opencode-rag index
 opencode-rag query "authentication middleware"
 ```
 
-**Prerequisites:** Node.js v22+, [Ollama](https://ollama.ai) (default) or OpenAI-compatible API.
+**Prerequisites:** Node.js v22+, [Ollama](https://ollama.ai) (default) or other LLM-hosters with installed embedding model (e.g. embeddinggemma).
 
 ## Key Features
 
