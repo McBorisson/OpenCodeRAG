@@ -771,7 +771,7 @@ describe("ragPlugin", () => {
         sessionID: "session-4",
         parts: [{
           type: "text",
-          text: "test",
+          text: "test the chunks",
           id: "prt-1",
           messageID: "msg-1",
           sessionID: "session-4",
@@ -779,7 +779,7 @@ describe("ragPlugin", () => {
       },
       parts: [{
         type: "text",
-        text: "test",
+        text: "test the chunks",
         id: "prt-1",
         messageID: "msg-1",
         sessionID: "session-4",
@@ -842,7 +842,7 @@ describe("ragPlugin", () => {
         sessionID: "session-5",
         parts: [{
           type: "text",
-          text: "test",
+          text: "test the chunks",
           id: "prt-1",
           messageID: "msg-1",
           sessionID: "session-5",
@@ -850,7 +850,7 @@ describe("ragPlugin", () => {
       },
       parts: [{
         type: "text",
-        text: "test",
+        text: "test the chunks",
         id: "prt-1",
         messageID: "msg-1",
         sessionID: "session-5",
@@ -911,7 +911,7 @@ describe("ragPlugin", () => {
         sessionID: "session-6",
         parts: [{
           type: "text",
-          text: "test",
+          text: "test the chunks",
           id: "prt-1",
           messageID: "msg-1",
           sessionID: "session-6",
@@ -919,7 +919,7 @@ describe("ragPlugin", () => {
       },
       parts: [{
         type: "text",
-        text: "test",
+        text: "test the chunks",
         id: "prt-1",
         messageID: "msg-1",
         sessionID: "session-6",
@@ -931,6 +931,77 @@ describe("ragPlugin", () => {
     const resultText = (output.parts[0] as Record<string, unknown>).text as string;
     assert.match(resultText, /src\/app\.ts/);
     assert.doesNotMatch(resultText, /home\/user\/workspace/);
+  });
+
+  it("suppresses auto-injection for single-word prompts", async () => {
+    const results = [
+      makeResult(
+        "chunk-1",
+        "/project/src/auth.ts",
+        10,
+        25,
+        "typescript",
+        "export function login() {}",
+        0.92
+      ),
+    ];
+
+    const storeWithResults: VectorStore = {
+      addChunks: async () => {},
+      search: async () => [],
+      count: async () => 5,
+      clear: async () => {},
+      deleteByFilePath: async () => {},
+    };
+
+    const { dependencies } = makeDependencies(results, 1);
+    const hooks = createRagHooks({
+      cfg: makeConfig({
+        openCode: {
+          enabled: true,
+          maxContextChunks: 5,
+          autoInject: { enabled: true, minScore: 0.75, maxChunks: 3, maxTokens: 2000 },
+        },
+      }),
+      storePath: "memory://",
+      logFilePath: path.join(tmpdir(), "opencode-rag.log"),
+      store: storeWithResults,
+      dependencies,
+      worktree: "/project",
+    });
+
+    const chatMessageHook = hooks["chat.message"];
+    assert.ok(chatMessageHook);
+
+    const output = {
+      message: {
+        id: "msg-1",
+        role: "user",
+        sessionID: "session-single",
+        parts: [{
+          type: "text",
+          text: "test",
+          id: "prt-1",
+          messageID: "msg-1",
+          sessionID: "session-single",
+        }],
+      },
+      parts: [{
+        type: "text",
+        text: "test",
+        id: "prt-1",
+        messageID: "msg-1",
+        sessionID: "session-single",
+      }],
+    };
+
+    await chatMessageHook?.({ sessionID: "session-single" } as never, output as never);
+
+    // The parts should remain unchanged — no injection for single-word prompts
+    const resultText = (output.parts[0] as Record<string, unknown>).text as string;
+    assert.equal(resultText, "test");
+    assert.doesNotMatch(resultText, /Auto-retrieved code context/);
+    assert.doesNotMatch(resultText, /Relevant files:/);
   });
 
 });

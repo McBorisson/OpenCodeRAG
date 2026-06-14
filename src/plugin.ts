@@ -650,6 +650,17 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
         sessionLastMessage.set(input.sessionID, text);
 
+        // Single-word prompt detection: suppress auto-injection, count spaces instead
+        const wordCount = text.trim().split(/\s+/).length;
+        if (wordCount <= 1) {
+          const spaceCount = (text.match(/ /g) ?? []).length;
+          appendDebugLog(options.logFilePath, {
+            scope: "chat.message",
+            message: `single-word prompt detected, suppressed auto-injection (spaceCount=${spaceCount})`,
+          });
+          return;
+        }
+
         const count = await store.count();
         if (count === 0) return;
 
