@@ -61,70 +61,40 @@ opencode-rag query "authentication middleware"
 | [Troubleshooting](doc/troubleshooting.md) | Common issues, logging, debugging |
 | [Roadmap](doc/roadmap.md) | Completed items, short/mid/long-term plans |
 
-## AGENTS.md Setup
+## Agent Discovery
 
-Add this to your workspace's `AGENTS.md` so OpenCode agents know how to use the plugin:
+OpenCodeRAG registers tools that agents can invoke directly. Agents discover these tools via the OpenCode **skill system** — when `opencode-rag init` runs, it creates `.opencode/skills/opencode-rag/SKILL.md` which teaches agents the recommended workflow:
 
-```markdown
-## OpenCodeRAG Plugin
+1. **Skeleton first** — `get_file_skeleton(filePath)` to orient in a file
+2. **Find usages** — `find_usages(symbolName)` before editing any symbol
+3. **Search** — `opencode-rag-context(query)` or `search_semantic(query)` to find relevant code
+4. **Read** — use `read` on specific line ranges
+5. **Edit** — make changes with full context
 
-This workspace has OpenCodeRAG installed for semantic code retrieval.
+### Available Tools
 
-### `opencode-rag-context` tool
-Before planning, editing, or answering, use this tool to retrieve relevant code
-chunks with file paths, line ranges, and surrounding implementation.
-- `query` (required) — narrow, specific search, e.g. `"authentication middleware setup"`
-- `pathHints` (optional) — up to 10 path filters, e.g. `["src/auth/"]`
-- `languageHints` (optional) — up to 10 language filters, e.g. `["typescript"]`
-- `topK` (optional) — result count (1–25, default 10)
-
-### `search_semantic` tool
-Search indexed code by meaning, not keywords. Use for conceptual questions like
-"How does authentication work?" or "Where is the chunking logic?".
-- `query` (required) — natural language description of what you're looking for
-- `pathHints` (optional) — up to 10 path filters
-- `languageHints` (optional) — up to 10 language filters
-- `topK` (optional) — result count (1–25, default 10)
-
-### `get_file_skeleton` tool
-Get a quick structural overview of a file without reading the full contents.
-Returns functions, classes, interfaces, and other declarations with line numbers.
-- `filePath` (required) — path to the file (relative to workspace root or absolute)
-
-### `find_usages` tool
-**Essential before editing a function or type.** Find every line in the
-indexed codebase that references a given symbol, with surrounding context.
-- `symbolName` (required) — the symbol to search for (function, variable, class, etc.)
-- `pathHint` (optional) — narrow search to a specific directory
-- `topK` (optional) — max results (1–50, default 30)
-
-### Indexing
-- Changed files are auto-indexed in the background (debounced 5s).
-- If searches return no results, run `opencode-rag index` in the terminal.
-```
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `opencode-rag-context` | General-purpose code retrieval | Before any code task when you haven't read the relevant code |
+| `search_semantic` | Conceptual code search | "How does X work?", "Where is Y?" |
+| `get_file_skeleton` | Quick file overview via AST | Before reading a large file to decide which sections matter |
+| `find_usages` | Symbol reference search | **Before editing** any function, variable, or class |
+| `read` (optional) | RAG-enhanced file read | Full file contents with supplementary context chunks |
 
 ## OpenCode Integration
 
-When using OpenCode, the plugin enhances your agent with two main features:
+When using OpenCode, the plugin enhances your agent with three discovery mechanisms:
 
-### 1. Auto-Injection (Background Context)
-After every message you send, the plugin effectively searches your vector-indexed codebase:
+### 1. Skill-Based Discovery (Recommended)
+`opencode-rag init` creates `.opencode/skills/opencode-rag/SKILL.md` — an OpenCode skill that teaches agents the tool workflow. Agents load it on demand via the `skill` tool, keeping token overhead minimal.
+
+### 2. Auto-Injection (Background Context)
+After every message you send, the plugin searches your vector-indexed codebase:
 - **High-confidence results (score ≥ 0.75):** Actual code chunks are injected directly into your prompt, giving the agent instant context without a tool-call round-trip.
 - **Lower-confidence results:** A compact list of suggested files is appended instead (e.g., `src/plugin.ts (lines 10-42)`).
 
-### 2. Specialized Agent Tools
-
-The plugin registers several tools that OpenCode agents can invoke for code retrieval and analysis:
-
-| Tool | Purpose | Best Use Case |
-|------|---------|--------------|
-| `opencode-rag-context` | General-purpose code retrieval | Any code search with optional path/language filters |
-| `search_semantic` | Conceptual code search | *"How does authentication work?"*, *"Where is the chunking logic?"* |
-| `get_file_skeleton` | Quick file overview via AST parsing | Orienting in an unfamiliar file without reading it entirely |
-| `find_usages` | Symbol reference search | **Essential before editing** — shows every call site with context |
-| `read` (optional) | RAG-enhanced file read | Full file contents with supplementary context chunks |
-
-The system prompt automatically lists all available tools so agents know when to use each one.
+### 3. System Prompt Guidance (Conditional)
+When chunks are indexed, a brief tool list is prepended to the system prompt so agents know the tools exist. This is skipped when no chunks are indexed to save tokens.
 
 ---
 

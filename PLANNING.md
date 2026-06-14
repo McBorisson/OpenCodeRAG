@@ -42,11 +42,14 @@
 - [x] `PluginModule` export pattern for OpenCode v1.17.0 compatibility
 - [x] Background auto-indexing via `createBackgroundIndexer()` with watcher status file
 - [x] API key auto-resolution from OpenCode provider config files
+- [x] Skill-based agent discovery (`.opencode/skills/opencode-rag/SKILL.md`) with tool workflow guidance
+- [x] Improved tool descriptions with "when to use" triggers for proactive agent invocation
+- [x] Conditional system prompt injection (skipped when no chunks indexed to save tokens)
 
 ### CLI & Distribution
 
 - [x] CLI (`init`, `index`, `query`, `clear`, `status`, `list`, `show`, `dump` via commander)
-- [x] Full `init` command lifecycle: generates `.opencode/plugins/rag-plugin.js` + `rag-tui.js`, `.gitignore`, `package.json`; runs `npm install`; cleans stale global plugin registrations; `--skip-install` flag
+- [x] Full `init` command lifecycle: generates `.opencode/plugins/rag-plugin.js` + `rag-tui.js`, `.opencode/skills/opencode-rag/SKILL.md`, `.gitignore`, `package.json`; runs `npm install`; cleans stale global plugin registrations; `--skip-install` flag
 - [x] Install scripts (`install.ps1` / `install.sh`) — build, pack, install to `~/.opencode/`, register in `opencode.jsonc`, CLI wrapper, full uninstall mode
 - [x] Release automation script (`scripts/release-patch.js` with `--dry` support)
 - [x] Multi-entry package exports: plugin, server, library, TUI

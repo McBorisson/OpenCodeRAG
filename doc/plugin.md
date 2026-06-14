@@ -92,7 +92,21 @@ The auto-injection respects:
 - Low-scoring chunks are evicted first to fit the budget
 - Paths are made relative via `path.relative(worktree, ...)`
 
-### 3. Read Tool Override
+### 3. Agent Skill Discovery
+
+`opencode-rag init` creates `.opencode/skills/opencode-rag/SKILL.md` — an OpenCode skill that teaches agents the recommended tool workflow. This is the primary discovery mechanism:
+
+- Agents see the skill listed in the `skill` tool description
+- Loading it injects the workflow guidance into the conversation
+- Zero ongoing token cost — only loaded when the agent chooses to load it
+
+The skill teaches the workflow: skeleton → find_usages → search → read → edit.
+
+### 4. System Prompt Guidance (Conditional)
+
+The `experimental.chat.system.transform` hook prepends a brief tool list to the system prompt, but **only when chunks are indexed** (`store.count() > 0`). This saves ~150 tokens per message for unindexed projects or fresh sessions.
+
+### 5. Read Tool Override
 
 When `openCode.readOverride` is `true`:
 
@@ -148,8 +162,8 @@ export default plugin;
 
 Do NOT register the plugin via `"plugin": ["opencode-rag-plugin"]` in OpenCode config. Instead, rely on `.opencode/plugins/*.js` auto-discovery:
 
-1. Run `opencode-rag init` to create `.opencode/plugins/rag-plugin.js`
-2. The generated file re-exports from `node_modules/`:
+1. Run `opencode-rag init` to create `.opencode/plugins/rag-plugin.js` and `.opencode/skills/opencode-rag/SKILL.md`
+2. The generated plugin file re-exports from `node_modules/`:
 
 ```javascript
 import plugin from "../node_modules/opencode-rag-plugin/dist/plugin-entry.js";

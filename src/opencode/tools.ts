@@ -241,8 +241,7 @@ export function createSearchSemanticTool(
   return tool({
     description:
       "Search the indexed codebase by meaning, not just keywords. " +
-      "Use this for conceptual questions like 'How does authentication work?' " +
-      "or 'Where is the chunking logic implemented?'. " +
+      "Call when the user asks 'how does X work?', 'where is Y?', or you need to understand code behavior. " +
       "Returns the most relevant code snippets with file paths and line numbers.",
 
     args: {
@@ -347,7 +346,7 @@ export function createFileSkeletonTool(
     description:
       "Get a quick structural overview of a source file — functions, classes, " +
       "interfaces, methods, and other top-level declarations with their line numbers. " +
-      "Use this to orient yourself in a file before reading the full contents. " +
+      "Call before reading a large file to decide which sections to focus on. " +
       "Supports TypeScript, JavaScript, Python, Java, Go, Rust, C/C++, C#, Ruby, Swift, Kotlin, and more.",
 
     args: {
@@ -495,9 +494,8 @@ export function createFindUsagesTool(
   return tool({
     description:
       "Find usages and references of a symbol (function, variable, class, etc.) " +
-      "across the indexed codebase. Essential before editing a function or type — " +
-      "it shows every line that references the symbol with surrounding context. " +
-      "Use this to understand the impact of a change.",
+      "across the indexed codebase. Call BEFORE editing any function, variable, or class " +
+      "to understand the impact — it shows every line that references the symbol with surrounding context.",
 
     args: {
       symbolName: tool.schema.string().min(1, "A symbol name is required."),

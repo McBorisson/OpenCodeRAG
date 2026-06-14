@@ -363,7 +363,7 @@ function formatFileList(results: SearchResult[], worktree: string): string {
     const lang = results.find((r) => r.chunk.metadata.filePath === filePath)?.chunk.metadata.language ?? "";
     lines.push(`${relPath} (${lang}, lines ${minLine}-${maxLine}, relevance ${relevance})`);
   }
-  lines.push("\nUse tools: opencode-rag-context(query, pathHints), search_semantic(query, pathHints, languageHints, topK), get_file_skeleton(filePath), find_usages(symbolName, pathHint, topK)");
+  lines.push("\nFor more context, use: `opencode-rag-context` for code search, `find_usages` before editing, `get_file_skeleton` to orient in files.");
   let linesReturn = lines.join("\n");
   return linesReturn;
 }
@@ -435,7 +435,9 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
   const retrievalTool = tool({
     description:
-      "Retrieve the most relevant indexed code chunks before planning, answering, or editing. Use it to get file-level evidence, line ranges, and surrounding implementation details.",
+      "Retrieve the most relevant indexed code chunks before planning, answering, or editing. " +
+      "Call before any code-related task when you haven't read the relevant code yet. " +
+      "Use it to get file-level evidence, line ranges, and surrounding implementation details.",
     args: {
       query: tool.schema.string().min(1, "A retrieval query is required."),
       pathHints: tool.schema.array(tool.schema.string().min(1)).max(10).optional(),
@@ -627,6 +629,9 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
     },
     tool: tools,
     async "experimental.chat.system.transform"(_input, output) {
+      const count = await store.count();
+      if (count === 0) return;
+
       appendDebugLog(options.logFilePath, {
         scope: "experimental.chat.system.transform",
         message: "system guidance injected",
@@ -634,10 +639,10 @@ export function createRagHooks(options: CreateRagHooksOptions): Hooks {
 
       const guidance = [
         "OpenCodeRAG tools are available:",
-        "- `opencode-rag-context`: general-purpose code retrieval (use for any code search)",
-        "- `search_semantic`: search code by concept/meaning (\"How does auth work?\")",
-        "- `get_file_skeleton`: quick structural outline of a file without reading it entirely",
-        "- `find_usages`: find where a symbol is referenced in the codebase (essential before editing)",
+        "- `opencode-rag-context`: general-purpose code retrieval",
+        "- `search_semantic`: search code by concept/meaning",
+        "- `get_file_skeleton`: quick structural outline of a file",
+        "- `find_usages`: find where a symbol is referenced (essential before editing)",
         "Use these tools before planning, editing, or answering when you need code provenance.",
       ];
 

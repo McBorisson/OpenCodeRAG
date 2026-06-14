@@ -214,16 +214,14 @@ Query vs document differentiation:
 - `autoIndex` config (`openCode.autoIndex`) controls `enabled`, `debounceMs` (default 5000), and `intervalMs` (default 300000).
 - `minFileSizeBytes` in `indexing` (default 1024) skips tiny files during indexing; files below the threshold are also removed from the store if previously indexed.
 
-### Plugin architecture — chat.message auto-injection
-- The plugin registers an `opencode-rag-context` tool (for chunk-level retrieval) and a `chat.message` hook.
-- On each user message, the `chat.message` hook runs retrieval. If high-confidence results exist (score ≥ `autoInject.minScore`, default 0.75), it **auto-injects the actual code chunks** via `formatAutoInjectContext()` in `src/plugin.ts`, saving a tool-call round-trip. If scores are below threshold, it falls back to a file suggestion list via `formatFileList()`.
-- `formatAutoInjectContext()` respects `maxChunks` (default 3) and `maxTokens` (default 2000, estimated at ~4 chars/token) budgets. Low-scoring chunks are evicted first to fit the budget.
-- `formatFileList()` groups results by file path, sorts by best score, and formats as `path (lang, lines N-M)` — max 10 files, no scores or snippets.
-- Paths in file suggestions and auto-injected context are made relative via `path.relative(worktree, ...)`.
-- `extractUserMessageText()` attempts to find user message text from `output.message` (via parts/text) then falls back to `output.message.content`.
-- When `openCode.readOverride` is `true`, the plugin registers a `read` tool backed by `createRagReadTool()` that shadows OpenCode's built-in read. The tool **always returns full file contents** from disk. When RAG chunks are available for the file (score ≥ threshold), they are appended as supplementary "Related code chunks" after the file content. If retrieval fails, the file is still returned without RAG context.
-- `overrideRead` config option renamed to `readOverride`, defaults to `false`.
-- `readNoResultsBehavior` config option is no longer used by the read tool (the fallback always reads the file), but is retained for backward compatibility.
+### Plugin architecture — agent discovery and auto-injection
+- The plugin registers `opencode-rag-context`, `search_semantic`, `get_file_skeleton`, and `find_usages` tools.
+- **Skill-based discovery:** `opencode-rag init` creates `.opencode/skills/opencode-rag/SKILL.md` which teaches agents the recommended workflow (skeleton → find_usages → search → read → edit). Agents load it on demand via the `skill` tool.
+- **System prompt guidance (conditional):** `experimental.chat.system.transform` prepends a tool list to the system prompt only when chunks are indexed (`store.count() > 0`), saving ~150 tokens/msg for unindexed projects.
+- **Auto-injection:** On each user message, the `chat.message` hook runs retrieval. High-confidence results (score ≥ `autoInject.minScore`, default 0.75) are auto-injected as code chunks. Low-confidence results fall back to a file suggestion list via `formatFileList()`.
+- `formatAutoInjectContext()` respects `maxChunks` (default 3) and `maxTokens` (default 2000) budgets.
+- `formatFileList()` groups results by file path, sorts by best score, and formats as `path (lang, lines N-M)` — max 10 files.
+- When `openCode.readOverride` is `true`, the plugin registers a `read` tool backed by `createRagReadTool()` that shadows OpenCode's built-in read.
 
 ### Plugins and module structure
 - `createRagHooks` now accepts optional pre-created `store` and `embedder` instances via `CreateRagHooksOptions`, allowing the plugin to create them with a probed vector dimension before passing them in.
@@ -245,9 +243,9 @@ Query vs document differentiation:
 - To uninstall, run `install.ps1 uninstall` or `install.sh uninstall`, which removes all global copies from `~/.local/bin/`, `~/.config/opencode/node_modules/`, `~/.opencode/node_modules/`, and cleans up `.tgz` files and config entries.
 
 ### `opencode-rag init` — workspace-local plugin fallback
-- `opencode-rag init` always creates `.opencode/plugins/rag-plugin.js` as a workspace-local fallback, even when global registration exists. This file re-exports from `node_modules/` and gives OpenCode a reliable local entry point.
+- `opencode-rag init` creates `.opencode/plugins/rag-plugin.js` (workspace-local fallback) and `.opencode/skills/opencode-rag/SKILL.md` (agent tool guide).
+- The skill file teaches agents the workflow: skeleton → find_usages → search → read → edit.
 - The install scripts clean up old `.opencode/plugins/` directories from a previous era, but the init command must recreate the local plugin file for workspaces that haven't run the global install.
-- Never remove the workspace-local plugin creation from `cli.ts`; it is the safety net when global plugin loading fails.
 
 ### "Plugin export is not a function" error (OpenCode v1.17.0)
 
@@ -377,52 +375,3 @@ both semantic meaning and code-level similarity.
 - Set `description.enabled: false` in config to disable and embed raw code instead
 - Config is in `src/core/config.ts` (`DescriptionConfig`), provider in `src/describer/`
 - Chunk descriptions now include relative path and line ranges (e.g. `src/foo.ts, lines 10-42`) even when LLM description is disabled, improving context
-
-## OpenCodeRAG Plugin
-
-This workspace has OpenCodeRAG installed for semantic code retrieval.
-
-### `opencode-rag-context` tool
-Before planning, editing, or answering, use this tool to retrieve relevant code
-chunks with file paths, line ranges, and surrounding implementation.
-- `query` (required) — narrow, specific search, e.g. `"authentication middleware setup"`
-- `pathHints` (optional) — up to 10 path filters, e.g. `["src/auth/"]`
-- `languageHints` (optional) — up to 10 language filters, e.g. `["typescript"]`
-- `topK` (optional) — result count (1-25, default 10)
-
-### `search_semantic` tool
-Search indexed code by meaning, not keywords. Use for conceptual questions like
-"How does authentication work?" or "Where is the chunking logic?".
-- `query` (required) — natural language description of what you're looking for
-- `pathHints` (optional) — up to 10 path filters
-- `languageHints` (optional) — up to 10 language filters
-- `topK` (optional) — result count (1-25, default 10)
-
-### `get_file_skeleton` tool
-Get a quick structural overview of a file without reading the full contents.
-Returns functions, classes, interfaces, and other declarations with line numbers.
-Uses tree-sitter for parsing (supports TypeScript, JavaScript, Python, Java, Go,
-Rust, C/C++, C#, Ruby, Swift, Kotlin, CSS, Markdown, and more).
-- `filePath` (required) — path to the file (relative to workspace root or absolute)
-
-### `find_usages` tool
-**Essential before editing a function or type.** Find every line in the
-indexed codebase that references a given symbol, with 2 lines of surrounding
-context. Uses the keyword index for precise matching and vector search for
-broader discovery. Detects and excludes the symbol's own definition.
-- `symbolName` (required) — the symbol to search for (function, variable, class, etc.)
-- `pathHint` (optional) — narrow search to a specific directory
-- `topK` (optional) — max results (1-50, default 30)
-
-### Auto-injected context
-When retrieval confidence is high (score ≥ 0.75), the relevant code chunks are
-injected directly into the message. Look for blocks starting with
-`**Auto-retrieved code context**`. When confidence is low, a compact file list
-is shown instead — lines like `src/file.ts (typescript, lines 10-42)`.
-
-### Indexing
-- The plugin auto-indexes changed files in the background (debounced 5s)
-- If no results come back, the workspace may not be indexed yet —
-  run `opencode-rag index` from the terminal (or `npx opencode-rag-plugin`)
-- Tiny files (under 1 KB), excluded extensions, and excluded directories
-  (`node_modules`, `.git`, `.opencode`, `dist`, etc.) are silently skipped

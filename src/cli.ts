@@ -288,6 +288,51 @@ function generateWorkspaceTuiPluginFile(packageName: string): string {
   ].join("\n");
 }
 
+function generateSkillFile(): string {
+  return [
+    "---",
+    "name: opencode-rag",
+    "description: Semantic code retrieval via OpenCodeRAG — vector search, file skeletons, and symbol usage lookup for this workspace",
+    "---",
+    "",
+    "## OpenCodeRAG Tools",
+    "",
+    "This workspace has OpenCodeRAG indexed for semantic code search. Use these tools BEFORE planning, editing, or answering code questions.",
+    "",
+    "### When to use each tool",
+    "",
+    "| Tool | Use when | Example |",
+    "|------|----------|---------|",
+    "| `opencode-rag-context` | Any code search — you need to find relevant code before acting | `\"authentication middleware\"` |",
+    "| `search_semantic` | Conceptual question — \"how does X work?\" or \"where is Y?\" | `\"How does the chunking pipeline work?\"` |",
+    "| `get_file_skeleton` | You have a file path but need to orient before reading | `\"src/plugin.ts\"` |",
+    "| `find_usages` | Before editing any function, class, or variable — check all call sites | `\"createRagHooks\"` |",
+    "",
+    "### Workflow",
+    "",
+    "1. **Skeleton first** — call `get_file_skeleton(filePath)` to see structure",
+    "2. **Find usages** — call `find_usages(symbolName)` before modifying any symbol",
+    "3. **Search** — call `opencode-rag-context(query)` or `search_semantic(query)` to find relevant code",
+    "4. **Read** — use the `read` tool on specific line ranges identified above",
+    "5. **Edit** — now you have full context to make safe changes",
+    "",
+    "### Parameters",
+    "",
+    "- `opencode-rag-context`: `query` (req), `pathHints?`, `languageHints?`, `topK?`",
+    "- `search_semantic`: `query` (req), `pathHints?`, `languageHints?`, `topK?`",
+    "- `get_file_skeleton`: `filePath` (req)",
+    "- `find_usages`: `symbolName` (req), `pathHint?`, `topK?`",
+    "",
+    "### Tips",
+    "",
+    "- Use `pathHints` to narrow searches to specific directories",
+    "- Use `languageHints` to filter by file type",
+    "- `find_usages` is essential before refactoring — it shows every reference",
+    "- If no results appear, the workspace may not be indexed yet — run `opencode-rag index`",
+    "",
+  ].join("\n");
+}
+
 function mergeGitignoreContent(existingContent?: string): string {
   const lines = existingContent ? existingContent.split(/\r?\n/) : [];
   const trimmed = new Set(lines.map((line) => line.trim()));
@@ -900,6 +945,25 @@ program
       console.log(`  ${c.updated("Updated:")}  .opencode/tui.json`);
     } else {
       console.log(`  ${c.exists("Exists:")}   .opencode/tui.json`);
+    }
+
+    const skillsDir = path.join(opencodeDir, "skills");
+    const skillDir = path.join(skillsDir, "opencode-rag");
+    const skillPath = path.join(skillDir, "SKILL.md");
+    if (!existsSync(skillsDir)) {
+      mkdirSync(skillsDir, { recursive: true });
+      console.log(`  ${c.created("Created:")}  .opencode/skills/`);
+    }
+    const skillContent = generateSkillFile();
+    const skillExists = existsSync(skillPath);
+    if (!skillExists || options.force) {
+      writeFileSync(skillPath, skillContent, "utf-8");
+      console.log(`  ${skillExists ? c.updated("Updated:") : c.created("Created:")} .opencode/skills/opencode-rag/SKILL.md`);
+    } else if (readFileSync(skillPath, "utf-8") !== skillContent) {
+      writeFileSync(skillPath, skillContent, "utf-8");
+      console.log(`  ${c.updated("Updated:")}  .opencode/skills/opencode-rag/SKILL.md`);
+    } else {
+      console.log(`  ${c.exists("Exists:")}   .opencode/skills/opencode-rag/SKILL.md`);
     }
 
     const workspacePackageExists = existsSync(opencodePackagePath);
