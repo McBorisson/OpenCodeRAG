@@ -91,12 +91,12 @@
   },
   "description": {
     "enabled": true,
-    "provider": "openai",
-    "baseUrl": "https://opencode.ai/zen",
-    "model": "deepseek-v4-flash-free",
+    "provider": "ollama",
+    "baseUrl": "https://localhost:11434/api",
+    "model": "qwen3:1.7b",
     "timeoutMs": 60000,
     "systemPrompt": "Describe code for semantic search in short simple words, simple grammar, no code, no comments. If user message contains multiple chunks labeled === CHUNK N ===, describe each one separately, starting each with CHUNK N: followed by the description. For a single chunk, output description directly.",
-    "apiKey": "sk-m3weYo25XBq5qLG6DxMM0B2fXre5cpAcsZ4BneH97R58LzfNu7jvlmwQAFMGPzlA"
+    "apiKey": ""
   },
   "logging": {
     "level": "debug",
