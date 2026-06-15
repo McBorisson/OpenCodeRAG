@@ -65,11 +65,11 @@ opencode-rag query "authentication middleware"
 
 OpenCodeRAG registers tools that agents can invoke directly. Agents discover these tools via the OpenCode **skill system** — when `opencode-rag init` runs, it creates `.opencode/skills/opencode-rag/SKILL.md` which teaches agents the recommended workflow:
 
-1. **Skeleton first** — `get_file_skeleton(filePath)` to orient in a file
-2. **Find usages** — `find_usages(symbolName)` before editing any symbol
-3. **Search** — `opencode-rag-context(query)` or `search_semantic(query)` to find relevant code
-4. **Read** — use `read` on specific line ranges
-5. **Edit** — make changes with full context
+1. **Skeleton first** - `get_file_skeleton(filePath)` to orient in a file
+2. **Find usages** - `find_usages(symbolName)` before editing any symbol
+3. **Search** - `opencode-rag-context(query)` or `search_semantic(query)` to find relevant code
+4. **Read** - use `read` on specific line ranges
+5. **Edit** - make changes with full context
 
 ### Available Tools
 
