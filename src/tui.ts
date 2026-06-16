@@ -442,17 +442,6 @@ async function addFileListToPrompt(api: RagContextApi, query?: string): Promise<
         parts: currentPromptRef.current.parts ?? [],
       });
       currentPromptRef.focus();
-    } else {
-      api.ui.dialog.replace(
-        () =>
-          api.ui.DialogPrompt({
-            title: `RAG File List (${results.length} files)`,
-            placeholder: "Copy context from here\u2026",
-            value: formatted,
-            onConfirm: () => api.ui.dialog.clear(),
-            onCancel: () => api.ui.dialog.clear(),
-          }),
-      );
     }
 
     api.ui.toast({
