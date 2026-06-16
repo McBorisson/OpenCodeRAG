@@ -49,7 +49,6 @@ opencode-rag query "authentication middleware"
 
 A browser-based dashboard for exploring the indexed vector database - browse and inspect chunks and evaluate the OpenCode sessions in terms of retrieved chunks, relevance scores, and more.
 
-![OpenCodeRAG Web UI](doc/assets/webui.png)
 ![OpenCodeRAG Web UI](doc/assets/eval.png)
 
 Launch with `opencode-rag ui`. See [Web UI documentation](doc/webui.md) for details.
